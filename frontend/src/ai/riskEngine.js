@@ -1,135 +1,98 @@
-// DriverGuard AI
-// Risk engine for driver safety monitoring.
+// src/ai/riskEngine.js
 
-let safetyScore = 100;
+let eyeClosedSince = null;
+let lastAlertTime = 0;
 
-let drowsinessState = {
-    eyesClosed: false,
-    closedStartTime: null,
-    warned: false,
-};
-
-const PENALTIES = {
-    drowsiness: 10,
-    distraction: 5,
-    phone: 15,
-    yawning: 3,
-    faceMissing: 5,
-};
+const EYE_WARNING_TIME = 1000;
+const EYE_DROWSY_TIME = 2000;
+const ALERT_COOLDOWN = 5000;
 
 
-// Reset complete monitoring session
+// Reset everything
 export function resetRiskEngine() {
-    safetyScore = 100;
 
-    drowsinessState = {
-        eyesClosed: false,
-        closedStartTime: null,
-        warned: false,
-    };
+    eyeClosedSince = null;
+    lastAlertTime = 0;
 
-    return safetyScore;
 }
 
 
-// Get current score
-export function getSafetyScore() {
-    return safetyScore;
-}
-
-
-// Apply penalty
-export function applyRisk(eventType) {
-    const penalty = PENALTIES[eventType] || 0;
-
-    safetyScore = Math.max(
-        0,
-        safetyScore - penalty
-    );
-
-    return safetyScore;
-}
-
-
-// Drowsiness monitoring
-export function updateDrowsiness(eyesClosed) {
-    const now = Date.now();
+// Update drowsiness state
+export function updateDrowsiness(
+    eyesClosed,
+    currentTime = Date.now()
+) {
 
     // Eyes are open
     if (!eyesClosed) {
-        drowsinessState = {
-            eyesClosed: false,
-            closedStartTime: null,
-            warned: false,
-        };
+
+        eyeClosedSince = null;
 
         return {
-            drowsy: false,
-            shouldAlert: false,
+            state: "normal",
+            label: "Normal",
             duration: 0,
-            score: safetyScore,
+            shouldAlert: false,
         };
     }
 
 
-    // Eyes have just closed
-    if (!drowsinessState.eyesClosed) {
-        drowsinessState.eyesClosed = true;
-        drowsinessState.closedStartTime = now;
-        drowsinessState.warned = false;
+    // First frame where eyes become closed
+    if (eyeClosedSince === null) {
+
+        eyeClosedSince = currentTime;
+
     }
 
 
     const duration =
-        now - drowsinessState.closedStartTime;
+        currentTime -
+        eyeClosedSince;
 
 
-    // Drowsiness threshold = 2 seconds
-    if (
-        duration >= 2000 &&
-        !drowsinessState.warned
-    ) {
-        drowsinessState.warned = true;
-
-        applyRisk("drowsiness");
+    // Normal brief eye closure
+    if (duration < EYE_WARNING_TIME) {
 
         return {
-            drowsy: true,
-            shouldAlert: true,
+            state: "normal",
+            label: "Normal",
             duration,
-            score: safetyScore,
+            shouldAlert: false,
         };
+
+    }
+
+
+    // Warning
+    if (duration < EYE_DROWSY_TIME) {
+
+        return {
+            state: "warning",
+            label: "Eyes closed",
+            duration,
+            shouldAlert: false,
+        };
+
+    }
+
+
+    // Drowsy
+    const canAlert =
+        currentTime - lastAlertTime >=
+        ALERT_COOLDOWN;
+
+
+    if (canAlert) {
+
+        lastAlertTime = currentTime;
+
     }
 
 
     return {
-        drowsy: duration >= 2000,
-        shouldAlert: false,
+        state: "drowsy",
+        label: "Drowsiness detected",
         duration,
-        score: safetyScore,
+        shouldAlert: canAlert,
     };
-}
-
-
-// Get risk level
-export function getRiskLevel(score = safetyScore) {
-    if (score >= 90) {
-        return "SAFE";
-    }
-
-    if (score >= 70) {
-        return "CAUTION";
-    }
-
-    if (score >= 50) {
-        return "HIGH RISK";
-    }
-
-    return "CRITICAL";
-}
-
-
-// Get penalty amount
-export function getPenalty(eventType) {
-    return PENALTIES[eventType] || 0;
 }

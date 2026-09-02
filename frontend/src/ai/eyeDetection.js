@@ -1,83 +1,87 @@
-// MediaPipe Face Landmarker eye landmark indexes
+```javascript
+// src/ai/eyeDetection.js
 
-const LEFT_EYE = [
-    362,
-    385,
-    387,
-    263,
-    373,
-    380,
-];
+// MediaPipe Face Landmarker landmark indexes
 
+// Left eye
+const LEFT_EYE = {
+    upper: [159, 160, 161],
+    lower: [145, 144, 163],
+    left: 33,
+    right: 133,
+};
 
-const RIGHT_EYE = [
-    33,
-    160,
-    158,
-    133,
-    153,
-    144,
-];
+// Right eye
+const RIGHT_EYE = {
+    upper: [386, 387, 388],
+    lower: [374, 373, 380],
+    left: 362,
+    right: 263,
+};
 
 
 // Calculate distance between two landmarks
-function distance(point1, point2) {
-    const dx =
-        point1.x - point2.x;
+function distance(a, b) {
 
-    const dy =
-        point1.y - point2.y;
+    if (!a || !b) {
+        return 0;
+    }
+
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    const dz = (a.z || 0) - (b.z || 0);
 
     return Math.sqrt(
-        dx * dx + dy * dy
+        dx * dx +
+        dy * dy +
+        dz * dz
     );
 }
 
 
 // Calculate Eye Aspect Ratio
-function calculateEAR(
-    landmarks,
-    indices
-) {
-    const p1 = landmarks[indices[0]];
-    const p2 = landmarks[indices[1]];
-    const p3 = landmarks[indices[2]];
-    const p4 = landmarks[indices[3]];
-    const p5 = landmarks[indices[4]];
-    const p6 = landmarks[indices[5]];
+function calculateEAR(landmarks, eye) {
 
+    const vertical1 = distance(
+        landmarks[eye.upper[0]],
+        landmarks[eye.lower[0]]
+    );
 
-    const vertical1 =
-        distance(p2, p6);
+    const vertical2 = distance(
+        landmarks[eye.upper[1]],
+        landmarks[eye.lower[1]]
+    );
 
-    const vertical2 =
-        distance(p3, p5);
+    const vertical3 = distance(
+        landmarks[eye.upper[2]],
+        landmarks[eye.lower[2]]
+    );
 
-    const horizontal =
-        distance(p1, p4);
-
+    const horizontal = distance(
+        landmarks[eye.left],
+        landmarks[eye.right]
+    );
 
     if (horizontal === 0) {
         return 0;
     }
 
-
     return (
-        (vertical1 + vertical2) /
-        (2 * horizontal)
+        (vertical1 + vertical2 + vertical3) /
+        (3 * horizontal)
     );
 }
 
 
-// Calculate eye state
-export function calculateEyeState(
-    faceLandmarks
-) {
+// Analyze both eyes
+export function detectEyes(faceLandmarks) {
+
     if (
         !faceLandmarks ||
         faceLandmarks.length === 0
     ) {
         return {
+            detected: false,
             leftEAR: 0,
             rightEAR: 0,
             averageEAR: 0,
@@ -85,37 +89,35 @@ export function calculateEyeState(
         };
     }
 
+    const landmarks = faceLandmarks[0];
 
-    const leftEAR =
-        calculateEAR(
-            faceLandmarks,
-            LEFT_EYE
-        );
+    const leftEAR = calculateEAR(
+        landmarks,
+        LEFT_EYE
+    );
 
-
-    const rightEAR =
-        calculateEAR(
-            faceLandmarks,
-            RIGHT_EYE
-        );
-
+    const rightEAR = calculateEAR(
+        landmarks,
+        RIGHT_EYE
+    );
 
     const averageEAR =
         (leftEAR + rightEAR) / 2;
 
 
-    // Initial threshold.
-    // We can calibrate this later.
+    // Eye closure threshold
     const EYE_CLOSED_THRESHOLD = 0.20;
+
+    const eyesClosed =
+        averageEAR < EYE_CLOSED_THRESHOLD;
 
 
     return {
+        detected: true,
         leftEAR,
         rightEAR,
         averageEAR,
-
-        eyesClosed:
-            averageEAR <
-            EYE_CLOSED_THRESHOLD,
+        eyesClosed,
     };
 }
+```

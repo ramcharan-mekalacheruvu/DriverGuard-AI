@@ -464,3 +464,72 @@
         object-fit: cover;
     }
 }
+.ear-debug-card {
+    margin-top: 16px;
+    padding: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.ear-debug-card span {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: #8f9bb3;
+}
+
+.ear-debug-card strong {
+    display: block;
+    margin-top: 6px;
+    font-size: 30px;
+}
+
+.ear-debug-card small {
+    display: block;
+    margin-top: 5px;
+    color: #7d879b;
+}
+
+
+.last-alert-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+    padding: 16px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.last-alert-card i {
+    font-size: 20px;
+}
+
+.last-alert-card span {
+    display: block;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: #8f9bb3;
+}
+
+.last-alert-card strong {
+    display: block;
+    margin-top: 4px;
+}
+.ear-debug-card strong {
+    color: #111827;
+}
+.ear-debug-card span {
+    display: block;
+    color: #94a3b8;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.ear-debug-card small {
+    display: block;
+    color: #94a3b8;
+    font-size: 0.75rem;
+    margin-top: 4px;
+}

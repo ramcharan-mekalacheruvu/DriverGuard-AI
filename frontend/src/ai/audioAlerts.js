@@ -1,33 +1,14 @@
-// DriverGuard AI
-// Browser voice alert system.
+// src/ai/audioAlerts.js
 
-let lastAlertTime = 0;
+let lastMessage = "";
+let lastMessageTime = 0;
 
-const ALERT_COOLDOWN = 5000;
-
-
-const ALERT_MESSAGES = {
-    drowsiness:
-        "Warning! You appear to be drowsy. Please take a break.",
-
-    distraction:
-        "Please keep your eyes on the road.",
-
-    phone:
-        "Warning! Please stop using your mobile phone while driving.",
-
-    faceMissing:
-        "Please keep your attention on the road.",
-
-    critical:
-        "Critical warning! Driver attention is low.",
-};
+const AUDIO_COOLDOWN = 5000;
 
 
-// Speak safety warning
-export function speakAlert(type) {
+export function speakAlert(message) {
+
     if (
-        typeof window === "undefined" ||
         !("speechSynthesis" in window)
     ) {
         console.warn(
@@ -41,51 +22,46 @@ export function speakAlert(type) {
     const now = Date.now();
 
 
-    // Prevent continuous alerts
     if (
-        now - lastAlertTime <
-        ALERT_COOLDOWN
+        message === lastMessage &&
+        now - lastMessageTime <
+            AUDIO_COOLDOWN
     ) {
         return;
     }
 
 
-    const message =
-        ALERT_MESSAGES[type] ||
-        "Warning! Please drive safely.";
-
-
     window.speechSynthesis.cancel();
 
 
-    const utterance =
+    const speech =
         new SpeechSynthesisUtterance(
             message
         );
 
 
-    utterance.rate = 1;
-
-    utterance.pitch = 1;
-
-    utterance.volume = 1;
+    speech.rate = 0.95;
+    speech.pitch = 1;
+    speech.volume = 1;
 
 
     window.speechSynthesis.speak(
-        utterance
+        speech
     );
 
 
-    lastAlertTime = now;
+    lastMessage = message;
+    lastMessageTime = now;
 }
 
 
-// Reset alert cooldown
+// Reset audio cooldown
 export function resetAudioAlerts() {
-    lastAlertTime = 0;
+
+    lastMessage = "";
+    lastMessageTime = 0;
 
     if (
-        typeof window !== "undefined" &&
         "speechSynthesis" in window
     ) {
         window.speechSynthesis.cancel();

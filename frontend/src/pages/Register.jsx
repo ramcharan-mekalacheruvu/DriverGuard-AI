@@ -1,7 +1,12 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import {
+    Link,
+    useNavigate,
+} from "react-router-dom";
 
 import api from "../services/api";
+
+import "../styles/auth.css";
 
 
 function Register() {
@@ -14,11 +19,13 @@ function Register() {
     });
 
     const [error, setError] = useState("");
+    const [loading, setLoading] = useState(false);
 
     const handleChange = (event) => {
         setForm({
             ...form,
-            [event.target.name]: event.target.value,
+            [event.target.name]:
+                event.target.value,
         });
     };
 
@@ -26,6 +33,7 @@ function Register() {
         event.preventDefault();
 
         setError("");
+        setLoading(true);
 
         try {
             await api.post(
@@ -38,65 +46,133 @@ function Register() {
         } catch (error) {
             console.error(error);
 
-            setError(
-                "Registration failed. Please check your details."
-            );
+            if (error.response?.data) {
+                const data =
+                    error.response.data;
+
+                const message =
+                    Object.values(data)
+                        .flat()
+                        .join(" ");
+
+                setError(message);
+            } else {
+                setError(
+                    "Registration failed."
+                );
+            }
+
+        } finally {
+            setLoading(false);
         }
     };
 
     return (
-        <div>
+        <main className="auth-page">
 
-            <h2>Create Account</h2>
+            <div className="auth-card">
 
-            {error && (
-                <p>{error}</p>
-            )}
+                <div className="auth-icon">
+                    <i className="bi bi-person-plus"></i>
+                </div>
 
-            <form onSubmit={handleSubmit}>
+                <h1>
+                    Create account
+                </h1>
 
-                <input
-                    type="text"
-                    name="username"
-                    placeholder="Username"
-                    value={form.username}
-                    onChange={handleChange}
-                    required
-                />
+                <p className="auth-subtitle">
+                    Start using AI-powered driver monitoring.
+                </p>
 
-                <br />
+                {error && (
+                    <div className="auth-error">
+                        {error}
+                    </div>
+                )}
 
-                <input
-                    type="email"
-                    name="email"
-                    placeholder="Email"
-                    value={form.email}
-                    onChange={handleChange}
-                    required
-                />
+                <form
+                    className="auth-form"
+                    onSubmit={handleSubmit}
+                >
 
-                <br />
+                    <div className="form-group">
 
-                <input
-                    type="password"
-                    name="password"
-                    placeholder="Password"
-                    value={form.password}
-                    onChange={handleChange}
-                    required
-                />
+                        <label>
+                            Username
+                        </label>
 
-                <br />
+                        <input
+                            className="form-input"
+                            type="text"
+                            name="username"
+                            placeholder="Choose a username"
+                            value={form.username}
+                            onChange={handleChange}
+                            required
+                        />
 
-                <button type="submit">
-                    Register
-                </button>
+                    </div>
 
-            </form>
+                    <div className="form-group">
 
-        </div>
+                        <label>
+                            Email
+                        </label>
+
+                        <input
+                            className="form-input"
+                            type="email"
+                            name="email"
+                            placeholder="you@example.com"
+                            value={form.email}
+                            onChange={handleChange}
+                            required
+                        />
+
+                    </div>
+
+                    <div className="form-group">
+
+                        <label>
+                            Password
+                        </label>
+
+                        <input
+                            className="form-input"
+                            type="password"
+                            name="password"
+                            placeholder="Minimum 8 characters"
+                            value={form.password}
+                            onChange={handleChange}
+                            required
+                        />
+
+                    </div>
+
+                    <button
+                        className="auth-submit"
+                        type="submit"
+                        disabled={loading}
+                    >
+                        {loading
+                            ? "Creating..."
+                            : "Create Account"
+                        }
+                    </button>
+
+                </form>
+
+                <p className="auth-footer">
+                    Already have an account?{" "}
+                    <Link to="/login">
+                        Sign in
+                    </Link>
+                </p>
+
+            </div>
+
+        </main>
     );
 }
-
 
 export default Register;

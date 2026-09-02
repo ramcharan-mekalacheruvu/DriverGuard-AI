@@ -1,10 +1,13 @@
+
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 
 import api from "../services/api";
+import "../styles/auth.css";
 
 
 function Login() {
+
     const navigate = useNavigate();
 
     const [form, setForm] = useState({
@@ -13,84 +16,213 @@ function Login() {
     });
 
     const [error, setError] = useState("");
+    const [loading, setLoading] = useState(false);
+
 
     const handleChange = (event) => {
+
         setForm({
             ...form,
             [event.target.name]: event.target.value,
         });
     };
 
+
     const handleSubmit = async (event) => {
+
         event.preventDefault();
 
         setError("");
+        setLoading(true);
 
         try {
+
             const response = await api.post(
                 "auth/login/",
                 form
             );
 
+            const accessToken =
+                response.data.access;
+
+            const refreshToken =
+                response.data.refresh;
+
+
+            if (!accessToken) {
+
+                setError(
+                    "Login failed. Access token was not received."
+                );
+
+                return;
+            }
+
+
             localStorage.setItem(
                 "access",
-                response.data.access
+                accessToken
             );
 
             localStorage.setItem(
                 "refresh",
-                response.data.refresh
+                refreshToken
             );
 
-            navigate("/dashboard");
+
+            // Verify that token was actually saved
+            console.log(
+                "Login successful"
+            );
+
+            console.log(
+                "Access token:",
+                localStorage.getItem("access")
+            );
+
+
+            // Go to dashboard
+            navigate("/dashboard", {
+                replace: true,
+            });
 
         } catch (error) {
-            console.error(error);
 
-            setError(
-                "Invalid username or password."
+            console.error(
+                "Login error:",
+                error
             );
+
+            if (
+                error.response &&
+                error.response.status === 401
+            ) {
+
+                setError(
+                    "Invalid username or password."
+                );
+
+            } else {
+
+                setError(
+                    "Unable to login. Please try again."
+                );
+            }
+
+        } finally {
+
+            setLoading(false);
         }
     };
 
+
     return (
-        <div>
 
-            <h2>DriverGuard Login</h2>
+        <div className="auth-page">
 
-            {error && (
-                <p>{error}</p>
-            )}
+            <div className="auth-card">
 
-            <form onSubmit={handleSubmit}>
+                <div className="auth-logo">
+                    🚗
+                </div>
 
-                <input
-                    type="text"
-                    name="username"
-                    placeholder="Username"
-                    value={form.username}
-                    onChange={handleChange}
-                    required
-                />
 
-                <br />
+                <h1>
+                    DriverGuard
+                </h1>
 
-                <input
-                    type="password"
-                    name="password"
-                    placeholder="Password"
-                    value={form.password}
-                    onChange={handleChange}
-                    required
-                />
 
-                <br />
+                <p className="auth-subtitle">
+                    AI-Based Driver Monitoring System
+                </p>
 
-                <button type="submit">
-                    Login
-                </button>
 
-            </form>
+                <h2>
+                    Welcome Back
+                </h2>
+
+
+                {error && (
+                    <div className="auth-error">
+                        {error}
+                    </div>
+                )}
+
+
+                <form
+                    className="auth-form"
+                    onSubmit={handleSubmit}
+                >
+
+                    <div className="form-group">
+
+                        <label htmlFor="username">
+                            Username
+                        </label>
+
+                        <input
+                            id="username"
+                            type="text"
+                            name="username"
+                            placeholder="Enter your username"
+                            value={form.username}
+                            onChange={handleChange}
+                            autoComplete="username"
+                            required
+                        />
+
+                    </div>
+
+
+                    <div className="form-group">
+
+                        <label htmlFor="password">
+                            Password
+                        </label>
+
+                        <input
+                            id="password"
+                            type="password"
+                            name="password"
+                            placeholder="Enter your password"
+                            value={form.password}
+                            onChange={handleChange}
+                            autoComplete="current-password"
+                            required
+                        />
+
+                    </div>
+
+
+                    <button
+                        className="auth-button"
+                        type="submit"
+                        disabled={loading}
+                    >
+
+                        {loading
+                            ? "Logging in..."
+                            : "Login"
+                        }
+
+                    </button>
+
+                </form>
+
+
+                <p className="auth-footer">
+
+                    Don't have an account?
+
+                    {" "}
+
+                    <Link to="/register">
+                        Create Account
+                    </Link>
+
+                </p>
+
+            </div>
 
         </div>
     );
@@ -98,3 +230,4 @@ function Login() {
 
 
 export default Login;
+

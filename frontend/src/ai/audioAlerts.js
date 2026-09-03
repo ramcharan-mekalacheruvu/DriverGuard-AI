@@ -1,3 +1,4 @@
+
 // src/ai/audioAlerts.js
 
 let lastMessage = "";
@@ -6,14 +7,36 @@ let lastMessageTime = 0;
 const AUDIO_COOLDOWN = 5000;
 
 let audioUnlocked = false;
-let selectedVoice = null;
+let voicesLoaded = false;
 
 
 // ---------------------------------------------
-// Check speech support
+// Exact DriverGuard alert messages
 // ---------------------------------------------
 
-function speechSupported() {
+export const ALERT_MESSAGES = {
+    phone:
+        "Please put the phone down and focus on driving.",
+
+    headPose:
+        "Please keep your eyes on the road.",
+
+    attention:
+        "Please focus your attention on the road.",
+
+    drowsiness:
+        "Warning. You appear to be drowsy. Please stay alert.",
+
+    yawning:
+        "You appear tired. Please stay alert.",
+};
+
+
+// ---------------------------------------------
+// Check browser support
+// ---------------------------------------------
+
+function isSpeechSupported() {
     return (
         typeof window !== "undefined" &&
         "speechSynthesis" in window &&
@@ -23,62 +46,78 @@ function speechSupported() {
 
 
 // ---------------------------------------------
-// Load a suitable voice
+// Load voices
 // ---------------------------------------------
 
-function loadVoice() {
+function loadVoices() {
 
-    if (!speechSupported()) {
-        return null;
+    if (!isSpeechSupported()) {
+        return [];
     }
 
     const voices =
         window.speechSynthesis.getVoices();
 
-    if (!voices || voices.length === 0) {
+    if (voices && voices.length > 0) {
+        voicesLoaded = true;
+    }
+
+    return voices || [];
+}
+
+
+// ---------------------------------------------
+// Get English voice
+// ---------------------------------------------
+
+function getVoice() {
+
+    const voices = loadVoices();
+
+    if (!voices.length) {
         return null;
     }
 
-    // Prefer English voices
-    const englishVoice =
-        voices.find((voice) =>
-            voice.lang &&
-            voice.lang.toLowerCase().startsWith("en")
-        );
-
-    selectedVoice =
-        englishVoice || voices[0];
-
-    return selectedVoice;
+    return (
+        voices.find(
+            (voice) =>
+                voice.lang &&
+                voice.lang
+                    .toLowerCase()
+                    .startsWith("en")
+        ) || voices[0]
+    );
 }
 
 
 // ---------------------------------------------
-// Load voices when browser provides them
+// Load voices when browser makes them available
 // ---------------------------------------------
 
-if (speechSupported()) {
+if (isSpeechSupported()) {
+
+    loadVoices();
 
     window.speechSynthesis.onvoiceschanged = () => {
-        loadVoice();
+        loadVoices();
     };
-
-    loadVoice();
 }
 
 
 // ---------------------------------------------
-// Unlock audio on mobile
+// Unlock speech
+//
 // IMPORTANT:
-// Call this directly from a user click/tap.
+// This function MUST be called directly from
+// the Start Monitoring button click.
 // ---------------------------------------------
 
 export function unlockAudio() {
 
-    if (!speechSupported()) {
+    if (!isSpeechSupported()) {
 
         console.warn(
-            "Speech synthesis is not supported by this browser."
+            "Speech synthesis is not supported."
         );
 
         return false;
@@ -86,51 +125,65 @@ export function unlockAudio() {
 
     try {
 
-        // Make sure voices are loaded
-        loadVoice();
+        const synth =
+            window.speechSynthesis;
 
-        // Stop anything currently speaking
-        window.speechSynthesis.cancel();
+        // Stop previous speech
+        synth.cancel();
 
-        /*
-         * Mobile browsers generally require speech to be
-         * triggered by a user interaction such as:
-         *
-         * Start Monitoring button
-         *
-         * This short silent utterance initializes speech.
-         */
-
-        const unlockSpeech =
-            new SpeechSynthesisUtterance(" ");
-
-        unlockSpeech.volume = 0;
-        unlockSpeech.rate = 1;
-        unlockSpeech.pitch = 1;
-
-        if (selectedVoice) {
-            unlockSpeech.voice = selectedVoice;
+        // Force browser to resume speech engine
+        if (typeof synth.resume === "function") {
+            synth.resume();
         }
 
-        unlockSpeech.onend = () => {
-            console.log("🔊 Mobile audio unlocked");
+        const voice = getVoice();
+
+        /*
+         * Very short silent utterance.
+         * This primes speech synthesis on many
+         * mobile browsers.
+         */
+        const unlockUtterance =
+            new SpeechSynthesisUtterance(".");
+
+        unlockUtterance.volume = 0;
+        unlockUtterance.rate = 10;
+        unlockUtterance.pitch = 1;
+
+        if (voice) {
+            unlockUtterance.voice = voice;
+        }
+
+        unlockUtterance.lang =
+            voice?.lang || "en-US";
+
+        unlockUtterance.onend = () => {
+
+            console.log(
+                "🔊 Speech engine unlocked"
+            );
         };
 
-        unlockSpeech.onerror = (error) => {
+        unlockUtterance.onerror = (error) => {
+
             console.warn(
-                "Audio unlock speech error:",
+                "Speech unlock warning:",
                 error
             );
         };
 
-        window.speechSynthesis.speak(
-            unlockSpeech
+        synth.speak(
+            unlockUtterance
         );
 
+        /*
+         * Set this immediately because this function
+         * itself is called by the user's tap.
+         */
         audioUnlocked = true;
 
         console.log(
-            "🔊 Audio unlocked successfully"
+            "🔊 Audio unlocked"
         );
 
         return true;
@@ -155,110 +208,110 @@ export function unlockAudio() {
 
 export function speakAlert(message) {
 
-    if (!speechSupported()) {
+    if (!isSpeechSupported()) {
 
         console.warn(
             "Speech synthesis is not supported."
         );
 
-        return;
+        return false;
     }
 
     if (!message) {
-        return;
+        return false;
     }
 
     /*
-     * If the user has not interacted with the page,
-     * browsers may block speech.
+     * If audio wasn't initialized, try to resume it.
      */
     if (!audioUnlocked) {
 
         console.warn(
-            "⚠️ Audio is locked. Call unlockAudio() from a user interaction."
+            "⚠️ Audio is locked. User interaction is required."
         );
 
-        return;
+        return false;
     }
 
     const now = Date.now();
 
     /*
-     * Prevent the same alert from being spoken repeatedly.
+     * Prevent repeated alerts.
      */
     if (
         message === lastMessage &&
         now - lastMessageTime < AUDIO_COOLDOWN
     ) {
-        return;
+        return false;
     }
 
     try {
 
-        // Stop previous speech
-        window.speechSynthesis.cancel();
+        const synth =
+            window.speechSynthesis;
 
-        const speech =
+        /*
+         * Mobile browsers can sometimes leave the
+         * speech engine paused.
+         */
+        if (typeof synth.resume === "function") {
+            synth.resume();
+        }
+
+        /*
+         * Cancel only existing speech.
+         */
+        synth.cancel();
+
+        const voice = getVoice();
+
+        const utterance =
             new SpeechSynthesisUtterance(
                 message
             );
 
-        speech.rate = 0.95;
-        speech.pitch = 1;
-        speech.volume = 1;
+        utterance.rate = 0.95;
+        utterance.pitch = 1;
+        utterance.volume = 1;
 
-        // Use selected voice if available
-        if (!selectedVoice) {
-            loadVoice();
+        utterance.lang =
+            voice?.lang || "en-US";
+
+        if (voice) {
+            utterance.voice = voice;
         }
 
-        if (selectedVoice) {
-            speech.voice = selectedVoice;
-        }
-
-        speech.lang =
-            selectedVoice?.lang || "en-US";
-
-        speech.onstart = () => {
+        utterance.onstart = () => {
 
             console.log(
-                "🔊 Speaking alert:",
+                "🔊 ALERT:",
                 message
             );
         };
 
-        speech.onend = () => {
+        utterance.onend = () => {
 
             console.log(
-                "🔊 Alert completed"
+                "🔊 Alert finished"
             );
         };
 
-        speech.onerror = (error) => {
+        utterance.onerror = (event) => {
 
             console.error(
                 "🔊 Speech error:",
-                error
+                event
             );
         };
 
-        /*
-         * Some mobile browsers behave better if speech
-         * synthesis is resumed before speaking.
-         */
-        if (
-            typeof window.speechSynthesis.resume ===
-            "function"
-        ) {
-            window.speechSynthesis.resume();
-        }
-
-        window.speechSynthesis.speak(
-            speech
+        synth.speak(
+            utterance
         );
 
         lastMessage = message;
         lastMessageTime = now;
+
+        return true;
 
     } catch (error) {
 
@@ -266,40 +319,19 @@ export function speakAlert(message) {
             "Speech alert failed:",
             error
         );
+
+        return false;
     }
 }
 
 
 // ---------------------------------------------
-// Exact DriverGuard alerts
-// ---------------------------------------------
-
-export const ALERT_MESSAGES = {
-
-    phone:
-        "Please put the phone down and focus on driving.",
-
-    headPose:
-        "Please keep your eyes on the road.",
-
-    attention:
-        "Please focus your attention on the road.",
-
-    drowsiness:
-        "Warning. You appear to be drowsy. Please stay alert.",
-
-    yawning:
-        "You appear tired. Please stay alert.",
-};
-
-
-// ---------------------------------------------
-// Convenience functions
+// Individual alert functions
 // ---------------------------------------------
 
 export function speakPhoneAlert() {
 
-    speakAlert(
+    return speakAlert(
         ALERT_MESSAGES.phone
     );
 }
@@ -307,7 +339,7 @@ export function speakPhoneAlert() {
 
 export function speakHeadPoseAlert() {
 
-    speakAlert(
+    return speakAlert(
         ALERT_MESSAGES.headPose
     );
 }
@@ -315,7 +347,7 @@ export function speakHeadPoseAlert() {
 
 export function speakAttentionAlert() {
 
-    speakAlert(
+    return speakAlert(
         ALERT_MESSAGES.attention
     );
 }
@@ -323,7 +355,7 @@ export function speakAttentionAlert() {
 
 export function speakDrowsinessAlert() {
 
-    speakAlert(
+    return speakAlert(
         ALERT_MESSAGES.drowsiness
     );
 }
@@ -331,14 +363,14 @@ export function speakDrowsinessAlert() {
 
 export function speakYawningAlert() {
 
-    speakAlert(
+    return speakAlert(
         ALERT_MESSAGES.yawning
     );
 }
 
 
 // ---------------------------------------------
-// Check whether audio is unlocked
+// Audio status
 // ---------------------------------------------
 
 export function isAudioUnlocked() {
@@ -348,7 +380,7 @@ export function isAudioUnlocked() {
 
 
 // ---------------------------------------------
-// Reset audio alerts
+// Reset alerts
 // ---------------------------------------------
 
 export function resetAudioAlerts() {
@@ -356,7 +388,7 @@ export function resetAudioAlerts() {
     lastMessage = "";
     lastMessageTime = 0;
 
-    if (speechSupported()) {
+    if (isSpeechSupported()) {
 
         window.speechSynthesis.cancel();
 
@@ -369,18 +401,15 @@ export function resetAudioAlerts() {
     }
 
     /*
-     * IMPORTANT:
+     * DO NOT set audioUnlocked to false.
      *
-     * Do NOT lock audio again when monitoring stops.
-     *
-     * Once the user has interacted with the application,
-     * we keep audio unlocked for the current page session.
+     * The user already interacted with the page.
      */
 }
 
 
 // ---------------------------------------------
-// Optional full audio reset
+// Completely lock audio
 // ---------------------------------------------
 
 export function lockAudio() {
@@ -390,7 +419,7 @@ export function lockAudio() {
     lastMessage = "";
     lastMessageTime = 0;
 
-    if (speechSupported()) {
+    if (isSpeechSupported()) {
         window.speechSynthesis.cancel();
     }
 }

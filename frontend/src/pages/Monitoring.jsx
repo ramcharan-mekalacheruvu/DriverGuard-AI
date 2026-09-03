@@ -20,6 +20,7 @@ import {
 } from "../ai/riskEngine";
 
 import {
+    unlockAudio,
     speakAlert,
     resetAudioAlerts,
 } from "../ai/audioAlerts";
@@ -361,17 +362,27 @@ function Monitoring() {
 
         try {
 
-            setCameraError("");
-            setAiError("");
-
-
             // -----------------------------------------
-            // Reset monitoring
+            // Reset previous monitoring state
             // -----------------------------------------
 
             resetRiskEngine();
 
             resetAudioAlerts();
+
+
+            /*
+             * MUST happen immediately from the user's
+             * Start Monitoring button click.
+             *
+             * Do this BEFORE getUserMedia().
+             */
+
+            unlockAudio();
+
+
+            setCameraError("");
+            setAiError("");
 
 
             setScore(100);

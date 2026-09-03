@@ -38,6 +38,11 @@ import {
     resetPhoneDetector,
 } from "../ai/phoneDetection";
 
+import {
+    detectYawn,
+    resetYawnDetection,
+} from "../ai/yawnDetection";
+
 
 // =====================================================
 // CONFIGURATION
@@ -47,19 +52,15 @@ import {
 const PHONE_DETECTION_INTERVAL = 1000;
 
 // Unsafe head pose must remain for this long
-// before alerting.
-const HEAD_POSE_DELAY = 1500;
+// before alerting. Lowered so head-pose alerts fire sooner.
+const HEAD_POSE_DELAY = 600;
 
 // Distracted attention must remain for this long.
 const ATTENTION_DELAY = 1500;
 
-// Drowsiness must remain for this long.
-const DROWSINESS_DELAY = 1800;
-
-// Yawning must remain for this long.
-const YAWNING_DELAY = 1500;
-
-// Minimum time between alerts of the same type.
+// Minimum time between alerts of the same type
+// (head pose / attention only — drowsiness and yawning
+// already debounce themselves inside their own modules).
 const CONDITION_ALERT_COOLDOWN = 7000;
 
 // Eye closure threshold
@@ -102,18 +103,15 @@ function Monitoring() {
 
     // -------------------------------------------------
     // Unsafe condition timers
+    // (only head pose / attention need local timers —
+    // drowsiness and yawning are already debounced
+    // inside riskEngine.js / yawnDetection.js)
     // -------------------------------------------------
 
     const headPoseStartRef =
         useRef(null);
 
     const attentionStartRef =
-        useRef(null);
-
-    const drowsinessStartRef =
-        useRef(null);
-
-    const yawningStartRef =
         useRef(null);
 
 
@@ -125,12 +123,6 @@ function Monitoring() {
         useRef(0);
 
     const lastAttentionAlertRef =
-        useRef(0);
-
-    const lastDrowsinessAlertRef =
-        useRef(0);
-
-    const lastYawningAlertRef =
         useRef(0);
 
     const lastPhoneAlertRef =
@@ -193,6 +185,12 @@ function Monitoring() {
 
     const [phoneDetectionReady, setPhoneDetectionReady] =
         useState(false);
+
+    const [yawning, setYawning] =
+        useState(false);
+
+    const [mouthMAR, setMouthMAR] =
+        useState(0);
 
 
     // =================================================
@@ -322,7 +320,7 @@ function Monitoring() {
 
         const closed =
             averageEAR > 0 &&
-            averageEAR <
+            averageEAR 
                 EYE_CLOSURE_THRESHOLD;
 
 
@@ -346,12 +344,6 @@ function Monitoring() {
 
         attentionStartRef.current =
             null;
-
-        drowsinessStartRef.current =
-            null;
-
-        yawningStartRef.current =
-            null;
     };
 
 
@@ -365,12 +357,6 @@ function Monitoring() {
             0;
 
         lastAttentionAlertRef.current =
-            0;
-
-        lastDrowsinessAlertRef.current =
-            0;
-
-        lastYawningAlertRef.current =
             0;
 
         lastPhoneAlertRef.current =
@@ -661,6 +647,7 @@ function Monitoring() {
 
             resetRiskEngine();
             resetAudioAlerts();
+            resetYawnDetection();
 
 
             // -----------------------------------------
@@ -676,6 +663,10 @@ function Monitoring() {
             setDrowsy(false);
 
             setEyeEAR(0);
+
+            setYawning(false);
+
+            setMouthMAR(0);
 
             setLastAlert(
                 "No alerts"
@@ -861,6 +852,8 @@ function Monitoring() {
 
         resetPhoneDetector();
 
+        resetYawnDetection();
+
 
         // ---------------------------------------------
         // Reset state
@@ -877,6 +870,10 @@ function Monitoring() {
         setDrowsy(false);
 
         setEyeEAR(0);
+
+        setYawning(false);
+
+        setMouthMAR(0);
 
         setLastAlert(
             "No alerts"
@@ -945,7 +942,7 @@ function Monitoring() {
 
         if (
             now -
-            lastPhoneDetectionRef.current <
+            lastPhoneDetectionRef.current 
             PHONE_DETECTION_INTERVAL
         ) {
             return;
@@ -1175,6 +1172,13 @@ function Monitoring() {
 
                     // =================================
                     // DROWSINESS
+                    //
+                    // riskEngine.updateDrowsiness() returns
+                    // { state, label, duration, shouldAlert } —
+                    // NOTE: there is no "drowsy" field, and
+                    // shouldAlert already has its own internal
+                    // cooldown, so we trust it directly instead
+                    // of re-implementing a second delay here.
                     // =================================
 
                     const risk =
@@ -1186,9 +1190,7 @@ function Monitoring() {
                     if (risk) {
 
                         const currentDrowsy =
-                            Boolean(
-                                risk.drowsy
-                            );
+                            risk.state === "drowsy";
 
 
                         setDrowsy(
@@ -1197,91 +1199,57 @@ function Monitoring() {
 
 
                         if (
-                            typeof risk.score ===
-                            "number"
+                            risk.shouldAlert
                         ) {
 
-                            const safeScore =
-                                Math.max(
-                                    0,
-                                    Math.min(
-                                        100,
-                                        Math.round(
-                                            risk.score
-                                        )
-                                    )
-                                );
+                            speakDrowsinessAlert();
 
-
-                            setScore(
-                                safeScore
+                            setLastAlert(
+                                "Drowsiness alert"
                             );
-                        }
-
-
-                        // -----------------------------
-                        // Drowsiness timer
-                        // -----------------------------
-
-                        if (
-                            currentDrowsy
-                        ) {
-
-                            if (
-                                drowsinessStartRef.current ===
-                                null
-                            ) {
-
-                                drowsinessStartRef.current =
-                                    now;
-                            }
-
-
-                            const drowsyDuration =
-                                now -
-                                drowsinessStartRef.current;
-
-
-                            const cooldownPassed =
-                                now -
-                                lastDrowsinessAlertRef.current >=
-                                CONDITION_ALERT_COOLDOWN;
-
-
-                            if (
-                                drowsyDuration >=
-                                DROWSINESS_DELAY &&
-                                cooldownPassed
-                            ) {
-
-                                speakDrowsinessAlert();
-
-                                lastDrowsinessAlertRef.current =
-                                    now;
-
-                                setLastAlert(
-                                    "Drowsiness alert"
-                                );
-                            }
-
-                        } else {
-
-                            drowsinessStartRef.current =
-                                null;
                         }
                     }
 
 
                     // =================================
                     // YAWNING
-                    // =================================
                     //
-                    // If your face detector later provides
-                    // a yawning value, this section can use it.
-                    //
-                    // Currently we deliberately DON'T invent
-                    // a yawning result.
+                    // detectYawn() already debounces
+                    // internally (mouth must stay open
+                    // for YAWN_DURATION, plus its own
+                    // YAWN_COOLDOWN) — so we trust its
+                    // "yawning" flag directly.
                     // =================================
+
+                    const yawnResult =
+                        detectYawn(
+                            landmarks,
+                            now
+                        );
+
+
+                    setMouthMAR(
+                        yawnResult.mar
+                    );
+
+
+                    setYawning(
+                        Boolean(
+                            yawnResult.yawning
+                        )
+                    );
+
+
+                    if (
+                        yawnResult.yawning
+                    ) {
+
+                        speakYawningAlert();
+
+                        setLastAlert(
+                            "Yawning detected"
+                        );
+                    }
 
                 } else {
 
@@ -1305,6 +1273,14 @@ function Monitoring() {
                         0
                     );
 
+                    setYawning(
+                        false
+                    );
+
+                    setMouthMAR(
+                        0
+                    );
+
                     setHeadDirection(
                         "Not detected"
                     );
@@ -1317,6 +1293,8 @@ function Monitoring() {
                     updateDrowsiness(
                         false
                     );
+
+                    resetYawnDetection();
 
 
                     // Reset condition timers
@@ -1828,8 +1806,20 @@ function Monitoring() {
                         <Detection
                             icon="bi-emoji-smile"
                             label="Yawning"
-                            value="Not analyzed"
-                            safe
+                            value={
+                                !cameraActive
+                                    ? "Waiting"
+                                    : !faceDetected
+                                        ? "Not detected"
+                                        : yawning
+                                            ? "Detected"
+                                            : "Normal"
+                            }
+                            safe={
+                                cameraActive &&
+                                faceDetected &&
+                                !yawning
+                            }
                         />
 
                     </div>
@@ -1854,6 +1844,30 @@ function Monitoring() {
                         <small>
                             Lower values indicate
                             greater eye closure.
+                        </small>
+
+                    </div>
+
+
+                    {/* =================================
+                        MOUTH DEBUG
+                    ================================== */}
+
+                    <div className="ear-debug-card">
+
+                        <span>
+                            MOUTH ASPECT RATIO
+                        </span>
+
+
+                        <strong>
+                            {mouthMAR.toFixed(3)}
+                        </strong>
+
+
+                        <small>
+                            Higher values indicate
+                            greater mouth opening.
                         </small>
 
                     </div>

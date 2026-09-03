@@ -78,9 +78,10 @@ const EYE_CLOSURE_THRESHOLD = 0.110;
 const EYE_CLOSURE_CONFIRM_TIME = 300;
 
 
-// Eyes must remain closed for 600 ms
-// before drowsiness is confirmed.
-const DROWSINESS_CONFIRM_TIME = 600;
+// Eyes must remain closed for 400 ms
+// after confirmed closure before drowsiness
+// is confirmed.
+const DROWSINESS_CONFIRM_TIME = 400;
 
 
 // -----------------------------------------------------
@@ -335,8 +336,7 @@ function Monitoring() {
 
 
         return (
-            vertical1 +
-            vertical2
+            vertical1 + vertical2
         ) /
         (
             2 * horizontal
@@ -653,7 +653,7 @@ function Monitoring() {
     ) => {
 
         /*
-         * First reset when eyes are open.
+         * Reset immediately when eyes open.
          */
 
         if (!eyesAreClosed) {
@@ -667,6 +667,11 @@ function Monitoring() {
             setEyesClosed(false);
 
             setDrowsy(false);
+
+            updateDrowsiness(
+                false,
+                performance.now()
+            );
 
             return;
         }
@@ -692,7 +697,7 @@ function Monitoring() {
 
 
         /*
-         * Eyes are only confirmed closed
+         * Eyes are confirmed closed
          * after 300 ms.
          */
 
@@ -717,6 +722,11 @@ function Monitoring() {
                 null;
 
             setDrowsy(false);
+
+            updateDrowsiness(
+                false,
+                performance.now()
+            );
 
             return;
         }
@@ -743,8 +753,9 @@ function Monitoring() {
 
 
         /*
-         * Drowsiness confirmed after
-         * 600 ms of confirmed eye closure.
+         * Drowsiness is now confirmed
+         * after 400 ms of confirmed
+         * eye closure.
          */
 
         const confirmedDrowsy =
@@ -758,17 +769,18 @@ function Monitoring() {
 
 
         /*
-         * Keep the existing risk engine synchronized.
+         * Keep the risk engine synchronized.
          */
 
         updateDrowsiness(
             confirmedDrowsy,
-            Date.now()
+            performance.now()
         );
 
 
         /*
-         * Generate audio alert.
+         * Generate audio alert immediately
+         * after drowsiness confirmation.
          */
 
         if (
@@ -834,7 +846,7 @@ function Monitoring() {
 
 
         /*
-         * Local faster confirmation:
+         * Local confirmation:
          *
          * MAR > 0.250
          * continuously for 600 ms
@@ -1618,7 +1630,7 @@ function Monitoring() {
 
                     updateDrowsiness(
                         false,
-                        Date.now()
+                        performance.now()
                     );
 
 

@@ -42,12 +42,12 @@ export const EYE_WARNING_TIME = 300;
  * Eyes must remain closed for this long
  * before drowsiness is confirmed.
  *
- * 600 ms
+ * 400 ms
  *
  * IMPORTANT:
  * This is milliseconds, not seconds.
  */
-export const EYE_DROWSY_TIME = 600;
+export const EYE_DROWSY_TIME = 400;
 
 
 /*
@@ -270,6 +270,10 @@ export function getRiskEngineStatus(
         eyeClosedSince;
 
 
+    // ========================================================
+    // NORMAL
+    // ========================================================
+
     if (
         duration <
         EYE_WARNING_TIME
@@ -288,6 +292,10 @@ export function getRiskEngineStatus(
     }
 
 
+    // ========================================================
+    // WARNING
+    // ========================================================
+
     if (
         duration <
         EYE_DROWSY_TIME
@@ -305,6 +313,10 @@ export function getRiskEngineStatus(
 
     }
 
+
+    // ========================================================
+    // DROWSY
+    // ========================================================
 
     return {
 

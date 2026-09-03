@@ -317,12 +317,7 @@ function Monitoring() {
                 rightEAR
             ) / 2;
 
-
-        const closed =
-            averageEAR > 0 &&
-            averageEAR 
-                EYE_CLOSURE_THRESHOLD;
-
+        const closed = averageEAR > 0 && averageEAR < EYE_CLOSURE_THRESHOLD;
 
         return {
             leftEAR,
@@ -940,11 +935,7 @@ function Monitoring() {
         // Interval
         // ---------------------------------------------
 
-        if (
-            now -
-            lastPhoneDetectionRef.current 
-            PHONE_DETECTION_INTERVAL
-        ) {
+        if (now - lastPhoneDetectionRef.current < PHONE_DETECTION_INTERVAL) {
             return;
         }
 

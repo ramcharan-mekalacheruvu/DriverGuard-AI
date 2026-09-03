@@ -120,7 +120,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 CORS_ALLOWED_ORIGINS = os.environ.get(
     "CORS_ALLOWED_ORIGINS",
-    "https://driver-guard-ai-phi.vercel.app/",
+    "https://driver-guard-ai-phi.vercel.app",
 ).split(",")
 
 CSRF_TRUSTED_ORIGINS = os.environ.get(

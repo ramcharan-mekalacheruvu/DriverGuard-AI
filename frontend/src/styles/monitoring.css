@@ -1,9 +1,28 @@
-.monitor-page {
-    max-width: 1450px;
-    margin: auto;
 
+/* =========================================================
+   DRIVER MONITORING PAGE
+   src/styles/monitoring.css
+   ========================================================= */
+
+
+/* =========================================================
+   MAIN PAGE
+   ========================================================= */
+
+.monitor-page {
+    width: 100%;
+    max-width: 1450px;
+    margin: 0 auto;
     padding: 50px 5%;
+    box-sizing: border-box;
+
+    color: #e5edf7;
 }
+
+
+/* =========================================================
+   HEADER
+   ========================================================= */
 
 .monitor-header {
     display: flex;
@@ -13,46 +32,76 @@
     gap: 20px;
 }
 
+
 .monitor-header > div:first-child > span {
+    display: block;
+
     color: #55b6ff;
 
     font-size: 10px;
     font-weight: 800;
+
     letter-spacing: 2px;
 }
 
+
 .monitor-header h1 {
-    margin-top: 8px;
+    margin: 8px 0 0;
+
+    color: #f1f5f9;
 
     font-size: 36px;
+    font-weight: 800;
+
     letter-spacing: -1px;
 }
 
+
 .monitor-header p {
-    margin-top: 7px;
+    margin: 7px 0 0;
 
     color: #8192a7;
+
+    font-size: 14px;
+    line-height: 1.5;
 }
+
+
+/* =========================================================
+   MONITORING STATUS
+   ========================================================= */
 
 .monitor-live,
 .monitor-offline {
+    display: inline-flex;
+    align-items: center;
+
     padding: 8px 12px;
 
     border-radius: 8px;
 
     font-size: 10px;
     font-weight: 800;
+
+    white-space: nowrap;
 }
+
 
 .monitor-live {
     background: rgba(74, 222, 128, 0.08);
     color: #4ade80;
+
+    border: 1px solid rgba(74, 222, 128, 0.12);
 }
+
 
 .monitor-offline {
     background: rgba(148, 163, 184, 0.08);
     color: #94a3b8;
+
+    border: 1px solid rgba(148, 163, 184, 0.10);
 }
+
 
 .monitor-live i,
 .monitor-offline i {
@@ -61,32 +110,71 @@
     font-size: 6px;
 }
 
+
+/* =========================================================
+   MAIN GRID
+   ========================================================= */
+
 .monitor-layout {
+    width: 100%;
+
     margin-top: 35px;
 
     display: grid;
+
     grid-template-columns:
-        minmax(0, 1fr) 330px;
+        minmax(0, 1fr)
+        330px;
 
     gap: 20px;
+
+    align-items: start;
 }
+
+
+/* =========================================================
+   COMMON CARDS
+   ========================================================= */
 
 .camera-panel,
 .monitor-score-card,
 .detection-card,
-.alert-info {
+.ear-debug-card,
+.last-alert-card,
+.alert-info,
+.ai-status {
+    box-sizing: border-box;
+
     border: 1px solid rgba(255, 255, 255, 0.07);
+
     border-radius: 16px;
 
-    background: rgba(255, 255, 255, 0.025);
+    background:
+        rgba(255, 255, 255, 0.025);
+
+    color: #dbe7f3;
 }
+
+
+/* =========================================================
+   CAMERA PANEL
+   ========================================================= */
 
 .camera-panel {
+    width: 100%;
+
     padding: 15px;
+
+    min-width: 0;
 }
 
+
+/* =========================================================
+   CAMERA TOOLBAR
+   ========================================================= */
+
 .camera-toolbar {
-    height: 40px;
+    min-height: 40px;
 
     display: flex;
     align-items: center;
@@ -96,28 +184,52 @@
 
     font-size: 10px;
     font-weight: 800;
+
     letter-spacing: 1px;
 }
+
+
+.camera-toolbar span {
+    display: inline-flex;
+    align-items: center;
+}
+
 
 .camera-toolbar i {
     margin-right: 6px;
 }
 
+
 .recording {
     color: #f87171;
 }
 
+
+.recording i {
+    font-size: 8px;
+}
+
+
+/* =========================================================
+   CAMERA CONTAINER
+   ========================================================= */
+
 .camera-container {
+    position: relative;
+
     width: 100%;
+
     aspect-ratio: 16 / 9;
 
-    position: relative;
     overflow: hidden;
 
     border-radius: 12px;
 
     background: #050d17;
+
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
+
 
 .camera-container video {
     width: 100%;
@@ -128,59 +240,97 @@
     object-fit: cover;
 
     transform: scaleX(-1);
+
+    background: #050d17;
 }
+
+
+/* =========================================================
+   CAMERA PLACEHOLDER
+   ========================================================= */
 
 .camera-placeholder {
     position: absolute;
+
     inset: 0;
 
+    z-index: 2;
+
     display: flex;
+
     flex-direction: column;
+
     align-items: center;
+
     justify-content: center;
+
+    text-align: center;
+
+    padding: 20px;
+
+    box-sizing: border-box;
 
     background:
         radial-gradient(
-            circle,
+            circle at center,
             rgba(85, 182, 255, 0.07),
             transparent 45%
         );
 }
+
 
 .camera-big-icon {
     width: 70px;
     height: 70px;
 
     display: flex;
+
     align-items: center;
     justify-content: center;
 
     border-radius: 18px;
 
-    background: rgba(85, 182, 255, 0.08);
+    background:
+        rgba(85, 182, 255, 0.08);
+
     color: #55b6ff;
 
     font-size: 28px;
 }
 
+
 .camera-placeholder h2 {
-    margin-top: 18px;
+    margin: 18px 0 0;
+
+    color: #e5edf7;
 
     font-size: 18px;
 }
 
+
 .camera-placeholder p {
-    margin-top: 5px;
+    margin: 5px 0 0;
 
     color: #687b91;
+
     font-size: 12px;
 }
 
+
+/* =========================================================
+   FACE GUIDE
+   ========================================================= */
+
 .face-guide {
     position: absolute;
+
     inset: 15%;
+
+    z-index: 3;
+
     pointer-events: none;
 }
+
 
 .guide-corner {
     position: absolute;
@@ -188,68 +338,124 @@
     width: 35px;
     height: 35px;
 
-    border-color: rgba(85, 182, 255, 0.75);
+    border-color:
+        rgba(85, 182, 255, 0.75);
+
     border-style: solid;
+
+    box-sizing: border-box;
 }
+
 
 .top-left {
     top: 0;
     left: 0;
 
-    border-width: 2px 0 0 2px;
+    border-width:
+        2px 0 0 2px;
 }
+
 
 .top-right {
     top: 0;
     right: 0;
 
-    border-width: 2px 2px 0 0;
+    border-width:
+        2px 2px 0 0;
 }
+
 
 .bottom-left {
     bottom: 0;
     left: 0;
 
-    border-width: 0 0 2px 2px;
+    border-width:
+        0 0 2px 2px;
 }
+
 
 .bottom-right {
     bottom: 0;
     right: 0;
 
-    border-width: 0 2px 2px 0;
+    border-width:
+        0 2px 2px 0;
 }
+
+
+/* =========================================================
+   CAMERA CONTROLS
+   ========================================================= */
 
 .camera-controls {
     padding: 15px 0 0;
 
     display: flex;
+
     justify-content: center;
 }
+
 
 .start-camera-btn,
 .stop-camera-btn {
     width: 100%;
 
+    min-height: 46px;
+
     padding: 13px;
 
-    border: none;
     border-radius: 9px;
 
+    font-family: inherit;
+
+    font-size: 14px;
     font-weight: 700;
+
+    cursor: pointer;
+
+    transition:
+        transform 0.2s ease,
+        opacity 0.2s ease,
+        background 0.2s ease;
 }
 
+
 .start-camera-btn {
+    border: none;
+
     background: #55b6ff;
+
     color: #06111f;
 }
 
+
+.start-camera-btn:hover {
+    opacity: 0.92;
+
+    transform: translateY(-1px);
+}
+
+
 .stop-camera-btn {
-    background: rgba(248, 113, 113, 0.1);
+    background:
+        rgba(248, 113, 113, 0.1);
+
     color: #fca5a5;
 
-    border: 1px solid rgba(248, 113, 113, 0.15);
+    border:
+        1px solid rgba(248, 113, 113, 0.15);
 }
+
+
+.stop-camera-btn:hover {
+    background:
+        rgba(248, 113, 113, 0.15);
+}
+
+
+/* =========================================================
+   CAMERA / AI ERROR
+   ========================================================= */
 
 .camera-error {
     margin-top: 10px;
@@ -258,49 +464,106 @@
 
     border-radius: 8px;
 
-    background: rgba(248, 113, 113, 0.08);
+    background:
+        rgba(248, 113, 113, 0.08);
+
+    border:
+        1px solid rgba(248, 113, 113, 0.10);
+
     color: #fca5a5;
 
     font-size: 12px;
+
+    line-height: 1.5;
 }
+
 
 .camera-error i {
     margin-right: 7px;
 }
 
+
+/* =========================================================
+   SIDEBAR
+   ========================================================= */
+
 .monitor-sidebar {
+    min-width: 0;
+
     display: flex;
+
     flex-direction: column;
+
     gap: 15px;
 }
+
+
+/* =========================================================
+   SCORE CARD
+   ========================================================= */
 
 .monitor-score-card {
     padding: 25px;
 
     text-align: center;
+
+    overflow: hidden;
 }
+
 
 .monitor-score-card > small {
-    color: #788ba0;
+    display: block;
+
+    color: #94a3b8;
 
     font-size: 9px;
+
     letter-spacing: 1.5px;
+
     font-weight: 800;
 }
+
+
+/*
+   IMPORTANT:
+   Score uses a light color instead of the old
+   inherited/dark color so it remains visible.
+*/
 
 .monitor-score {
+    display: block;
+
     margin-top: 12px;
 
+    color: #f8fafc;
+
     font-size: 52px;
+
+    line-height: 1.1;
+
     font-weight: 800;
+
+    letter-spacing: -1px;
+
+    text-shadow:
+        0 0 18px rgba(85, 182, 255, 0.12);
 }
+
 
 .monitor-score span {
-    color: #687a8e;
+    color: #94a3b8;
 
     font-size: 15px;
+
     font-weight: 500;
+
+    letter-spacing: 0;
 }
+
+
+/* =========================================================
+   SCORE STATUS
+   ========================================================= */
 
 .score-status {
     width: fit-content;
@@ -309,227 +572,854 @@
 
     padding: 7px 11px;
 
+    display: flex;
+
+    align-items: center;
+
+    gap: 5px;
+
     border-radius: 7px;
 
-    background: rgba(74, 222, 128, 0.08);
+    background:
+        rgba(74, 222, 128, 0.08);
+
     color: #4ade80;
 
+    border:
+        1px solid rgba(74, 222, 128, 0.10);
+
     font-size: 10px;
+
     font-weight: 800;
 }
+
+
+.score-status i {
+    font-size: 11px;
+}
+
+
+/* =========================================================
+   DETECTION CARD
+   ========================================================= */
 
 .detection-card {
     padding: 20px;
 }
 
+
 .detection-heading {
+    min-height: 22px;
+
     display: flex;
+
+    align-items: center;
+
     justify-content: space-between;
 
     padding-bottom: 10px;
 
-    color: #77899e;
+    color: #94a3b8;
 
     font-size: 9px;
+
     font-weight: 800;
+
     letter-spacing: 1.4px;
 }
 
+
 .detection-heading i {
     color: #55b6ff;
+
+    font-size: 14px;
 }
+
+
+/* =========================================================
+   DETECTION ROW
+   ========================================================= */
 
 .detection-row {
     min-height: 57px;
 
     display: flex;
+
     align-items: center;
+
     gap: 11px;
 
-    border-top: 1px solid rgba(255, 255, 255, 0.055);
+    border-top:
+        1px solid rgba(255, 255, 255, 0.055);
 }
+
 
 .detection-icon {
     width: 32px;
     height: 32px;
 
+    flex: 0 0 32px;
+
     display: flex;
+
     align-items: center;
     justify-content: center;
 
     border-radius: 8px;
 
-    background: rgba(255, 255, 255, 0.035);
-    color: #8fa1b6;
+    background:
+        rgba(255, 255, 255, 0.035);
+
+    color: #a7b6c8;
+
+    font-size: 14px;
 }
+
 
 .detection-label {
     flex: 1;
+
+    min-width: 0;
 }
+
 
 .detection-label span {
     display: block;
 
-    color: #718399;
+    color: #8fa0b4;
 
     font-size: 10px;
+
+    line-height: 1.2;
 }
+
 
 .detection-label strong {
     display: block;
 
     margin-top: 3px;
 
-    color: #d7e1ec;
+    color: #e5edf7;
 
     font-size: 12px;
+
+    font-weight: 700;
+
+    line-height: 1.3;
+
+    overflow-wrap: anywhere;
 }
+
 
 .detection-check {
+    flex: 0 0 auto;
+
     color: #4ade80;
+
     font-size: 13px;
 }
+
 
 .detection-wait {
+    flex: 0 0 auto;
+
     color: #718399;
+
     font-size: 13px;
 }
 
-.alert-info {
-    padding: 16px;
 
-    display: flex;
-    gap: 12px;
+/* =========================================================
+   EAR / DEBUG CARD
+   ========================================================= */
 
-    color: #8ca0b5;
+.ear-debug-card {
+    width: 100%;
+
+    margin-top: 0;
+
+    padding: 18px;
+
+    background:
+        rgba(255, 255, 255, 0.03);
+
+    overflow: hidden;
 }
 
-.alert-info > i {
+
+.ear-debug-card span {
+    display: block;
+
+    color: #94a3b8;
+
+    font-size: 11px;
+
+    font-weight: 600;
+
+    letter-spacing: 1px;
+}
+
+
+/*
+   IMPORTANT:
+   The old CSS had:
+       color: #111827;
+
+   which made the number almost invisible on
+   the dark background.
+
+   This is now a bright color.
+*/
+
+.ear-debug-card strong {
+    display: block;
+
+    margin-top: 6px;
+
+    color: #f8fafc;
+
+    font-size: 30px;
+
+    font-weight: 800;
+
+    line-height: 1.2;
+
+    letter-spacing: -0.5px;
+
+    text-shadow:
+        0 0 14px rgba(85, 182, 255, 0.10);
+}
+
+
+.ear-debug-card small {
+    display: block;
+
+    margin-top: 5px;
+
+    color: #94a3b8;
+
+    font-size: 12px;
+
+    line-height: 1.5;
+}
+
+
+/* =========================================================
+   LAST ALERT
+   ========================================================= */
+
+.last-alert-card {
+    display: flex;
+
+    align-items: center;
+
+    gap: 12px;
+
+    margin-top: 0;
+
+    padding: 16px;
+
+    background:
+        rgba(255, 255, 255, 0.04);
+}
+
+
+.last-alert-card > i {
+    flex: 0 0 auto;
+
+    width: 36px;
+    height: 36px;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 9px;
+
+    background:
+        rgba(85, 182, 255, 0.08);
+
     color: #55b6ff;
 
     font-size: 18px;
 }
 
+
+.last-alert-card > div {
+    min-width: 0;
+}
+
+
+.last-alert-card span {
+    display: block;
+
+    color: #94a3b8;
+
+    font-size: 10px;
+
+    font-weight: 700;
+
+    letter-spacing: 1px;
+}
+
+
+.last-alert-card strong {
+    display: block;
+
+    margin-top: 4px;
+
+    color: #e5edf7;
+
+    font-size: 12px;
+
+    font-weight: 700;
+
+    line-height: 1.4;
+
+    overflow-wrap: anywhere;
+}
+
+
+/* =========================================================
+   AUDIO ALERT INFORMATION
+   ========================================================= */
+
+.alert-info {
+    padding: 16px;
+
+    display: flex;
+
+    gap: 12px;
+
+    color: #8ca0b5;
+}
+
+
+.alert-info > i {
+    flex: 0 0 auto;
+
+    color: #55b6ff;
+
+    font-size: 18px;
+}
+
+
+.alert-info > div {
+    min-width: 0;
+}
+
+
 .alert-info strong {
+    display: block;
+
     color: #b7c6d6;
 
     font-size: 12px;
 }
 
+
 .alert-info p {
-    margin-top: 5px;
+    margin: 5px 0 0;
+
+    color: #8192a7;
 
     font-size: 10px;
+
     line-height: 1.6;
 }
 
+
+/* =========================================================
+   AI STATUS
+   ========================================================= */
+
+.ai-status {
+    min-height: 42px;
+
+    padding: 11px 14px;
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 9px;
+
+    background:
+        rgba(74, 222, 128, 0.045);
+
+    border-color:
+        rgba(74, 222, 128, 0.10);
+
+    color: #4ade80;
+
+    font-size: 11px;
+
+    font-weight: 700;
+}
+
+
+.ai-status i {
+    font-size: 15px;
+}
+
+
+/* =========================================================
+   TABLET
+   ========================================================= */
+
+@media (max-width: 1100px) {
+
+    .monitor-page {
+        padding-left: 4%;
+        padding-right: 4%;
+    }
+
+
+    .monitor-layout {
+        grid-template-columns:
+            minmax(0, 1fr)
+            300px;
+    }
+
+
+    .monitor-score {
+        font-size: 48px;
+    }
+}
+
+
+/* =========================================================
+   TABLET / SMALL LAPTOP
+   ========================================================= */
+
 @media (max-width: 950px) {
+
     .monitor-layout {
         grid-template-columns: 1fr;
     }
 
+
     .monitor-sidebar {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+
+        grid-template-columns:
+            repeat(2, minmax(0, 1fr));
+
+        gap: 15px;
     }
 
-    .alert-info {
+
+    .monitor-score-card,
+    .detection-card {
+        min-width: 0;
+    }
+
+
+    .alert-info,
+    .ai-status {
         grid-column: 1 / -1;
     }
 }
 
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
 @media (max-width: 600px) {
+
     .monitor-page {
-        padding: 35px 15px;
+        width: 100%;
+
+        padding:
+            30px 14px 40px;
     }
+
+
+    /* ---------------- Header ---------------- */
 
     .monitor-header {
         align-items: flex-start;
+
         flex-direction: column;
+
+        gap: 14px;
     }
+
 
     .monitor-header h1 {
+        margin-top: 7px;
+
         font-size: 29px;
+
+        line-height: 1.15;
     }
 
-    .monitor-sidebar {
-        display: flex;
+
+    .monitor-header p {
+        max-width: 100%;
+
+        font-size: 12px;
+
+        line-height: 1.5;
     }
+
+
+    .monitor-live,
+    .monitor-offline {
+        align-self: flex-start;
+
+        padding: 8px 11px;
+    }
+
+
+    /* ---------------- Layout ---------------- */
+
+    .monitor-layout {
+        margin-top: 25px;
+
+        display: flex;
+
+        flex-direction: column;
+
+        gap: 16px;
+    }
+
+
+    /* ---------------- Camera ---------------- */
+
+    .camera-panel {
+        padding: 10px;
+
+        border-radius: 14px;
+    }
+
+
+    .camera-toolbar {
+        min-height: 36px;
+
+        font-size: 9px;
+    }
+
+
+    /*
+       Portrait camera on mobile.
+       The video itself still fills the container.
+    */
 
     .camera-container {
         aspect-ratio: 3 / 4;
+
+        border-radius: 10px;
     }
+
 
     .camera-container video {
+        width: 100%;
+        height: 100%;
+
         object-fit: cover;
     }
-}
-.ear-debug-card {
-    margin-top: 16px;
-    padding: 18px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    background: rgba(255, 255, 255, 0.03);
-}
-
-.ear-debug-card span {
-    display: block;
-    font-size: 11px;
-    letter-spacing: 1px;
-    color: #8f9bb3;
-}
-
-.ear-debug-card strong {
-    display: block;
-    margin-top: 6px;
-    font-size: 30px;
-}
-
-.ear-debug-card small {
-    display: block;
-    margin-top: 5px;
-    color: #7d879b;
-}
 
 
-.last-alert-card {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-top: 16px;
-    padding: 16px;
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.04);
+    .face-guide {
+        inset: 12%;
+    }
+
+
+    .guide-corner {
+        width: 28px;
+        height: 28px;
+    }
+
+
+    .camera-placeholder {
+        padding: 15px;
+    }
+
+
+    .camera-big-icon {
+        width: 58px;
+        height: 58px;
+
+        border-radius: 15px;
+
+        font-size: 23px;
+    }
+
+
+    .camera-placeholder h2 {
+        margin-top: 14px;
+
+        font-size: 16px;
+    }
+
+
+    .camera-placeholder p {
+        max-width: 230px;
+
+        font-size: 11px;
+    }
+
+
+    .camera-controls {
+        padding-top: 12px;
+    }
+
+
+    .start-camera-btn,
+    .stop-camera-btn {
+        min-height: 44px;
+
+        padding: 11px;
+
+        font-size: 13px;
+    }
+
+
+    /* ---------------- Sidebar ---------------- */
+
+    .monitor-sidebar {
+        width: 100%;
+
+        display: flex;
+
+        flex-direction: column;
+
+        gap: 12px;
+    }
+
+
+    /* ---------------- Score ---------------- */
+
+    .monitor-score-card {
+        padding: 20px;
+    }
+
+
+    .monitor-score {
+        margin-top: 10px;
+
+        font-size: 48px;
+
+        line-height: 1.1;
+    }
+
+
+    .monitor-score span {
+        font-size: 14px;
+    }
+
+
+    .score-status {
+        margin-top: 9px;
+
+        padding: 6px 10px;
+
+        font-size: 9px;
+    }
+
+
+    /* ---------------- Detection ---------------- */
+
+    .detection-card {
+        padding: 16px;
+    }
+
+
+    .detection-row {
+        min-height: 53px;
+
+        gap: 9px;
+    }
+
+
+    .detection-icon {
+        width: 30px;
+        height: 30px;
+
+        flex-basis: 30px;
+    }
+
+
+    .detection-label span {
+        font-size: 10px;
+    }
+
+
+    .detection-label strong {
+        font-size: 12px;
+    }
+
+
+    /* ---------------- EAR ---------------- */
+
+    .ear-debug-card {
+        padding: 16px;
+
+        border-radius: 14px;
+    }
+
+
+    .ear-debug-card span {
+        font-size: 10px;
+    }
+
+
+    .ear-debug-card strong {
+        margin-top: 7px;
+
+        /*
+           Keep EAR highly visible on mobile.
+        */
+
+        color: #f8fafc;
+
+        font-size: 29px;
+
+        line-height: 1.2;
+    }
+
+
+    .ear-debug-card small {
+        font-size: 11px;
+
+        line-height: 1.5;
+    }
+
+
+    /* ---------------- Last alert ---------------- */
+
+    .last-alert-card {
+        padding: 14px;
+
+        border-radius: 14px;
+    }
+
+
+    .last-alert-card > i {
+        width: 34px;
+        height: 34px;
+
+        font-size: 17px;
+    }
+
+
+    .last-alert-card strong {
+        font-size: 11px;
+    }
+
+
+    /* ---------------- Audio info ---------------- */
+
+    .alert-info {
+        padding: 14px;
+
+        border-radius: 14px;
+    }
+
+
+    .alert-info strong {
+        font-size: 11px;
+    }
+
+
+    .alert-info p {
+        font-size: 10px;
+    }
+
+
+    /* ---------------- AI status ---------------- */
+
+    .ai-status {
+        padding: 11px 13px;
+
+        font-size: 10px;
+    }
 }
 
-.last-alert-card i {
-    font-size: 20px;
+
+/* =========================================================
+   VERY SMALL PHONES
+   ========================================================= */
+
+@media (max-width: 380px) {
+
+    .monitor-page {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+
+
+    .monitor-header h1 {
+        font-size: 26px;
+    }
+
+
+    .camera-panel {
+        padding: 8px;
+    }
+
+
+    .monitor-score-card {
+        padding: 18px;
+    }
+
+
+    .monitor-score {
+        font-size: 44px;
+    }
+
+
+    .detection-card {
+        padding: 14px;
+    }
+
+
+    .ear-debug-card {
+        padding: 14px;
+    }
+
+
+    .ear-debug-card strong {
+        font-size: 27px;
+    }
 }
 
-.last-alert-card span {
-    display: block;
-    font-size: 10px;
-    letter-spacing: 1px;
-    color: #8f9bb3;
+
+/* =========================================================
+   ACCESSIBILITY / TOUCH
+   ========================================================= */
+
+.start-camera-btn,
+.stop-camera-btn {
+    -webkit-tap-highlight-color: transparent;
+
+    touch-action: manipulation;
 }
 
-.last-alert-card strong {
-    display: block;
-    margin-top: 4px;
-}
-.ear-debug-card strong {
-    color: #111827;
-}
-.ear-debug-card span {
-    display: block;
-    color: #94a3b8;
-    font-size: 0.75rem;
-    font-weight: 600;
+
+.start-camera-btn:focus-visible,
+.stop-camera-btn:focus-visible {
+    outline: 2px solid #55b6ff;
+
+    outline-offset: 3px;
 }
 
-.ear-debug-card small {
-    display: block;
-    color: #94a3b8;
-    font-size: 0.75rem;
-    margin-top: 4px;
+
+/* =========================================================
+   PREVENT HORIZONTAL OVERFLOW
+   ========================================================= */
+
+.monitor-page,
+.monitor-layout,
+.camera-panel,
+.monitor-sidebar {
+    max-width: 100%;
 }
+
+
+/* =========================================================
+   END
+   ========================================================= */

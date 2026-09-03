@@ -49,30 +49,51 @@ import {
 // CONFIGURATION
 // =====================================================
 
-// Phone detection is checked every 250 ms.
-// This makes brief phone appearances easier to detect.
+// Phone detection frequency
 const PHONE_DETECTION_INTERVAL = 250;
 
 
-// Unsafe head pose must remain for this long
-// before an alert is generated.
+// Head pose confirmation
 const HEAD_POSE_DELAY = 600;
 
 
-// Distracted attention must remain for this long
-// before an alert is generated.
+// Attention confirmation
 const ATTENTION_DELAY = 1500;
 
 
-// Minimum time between head-pose / attention / phone
-// alerts.
+// General alert cooldown
 const CONDITION_ALERT_COOLDOWN = 7000;
 
 
-// Eye closure threshold.
-//
-// EAR below 0.110 = eyes considered closed.
+// -----------------------------------------------------
+// EYE CONFIGURATION
+// -----------------------------------------------------
+
+// EAR below this value = eyes closed
 const EYE_CLOSURE_THRESHOLD = 0.110;
+
+
+// Eyes must remain closed for 300 ms
+// before the UI considers them closed.
+const EYE_CLOSURE_CONFIRM_TIME = 300;
+
+
+// Eyes must remain closed for 600 ms
+// before drowsiness is confirmed.
+const DROWSINESS_CONFIRM_TIME = 600;
+
+
+// -----------------------------------------------------
+// YAWN CONFIGURATION
+// -----------------------------------------------------
+
+// MAR above this value = mouth sufficiently open
+const YAWN_MAR_THRESHOLD = 0.250;
+
+
+// Mouth must remain above 0.250 for 600 ms
+// before yawning is confirmed.
+const YAWN_CONFIRM_TIME = 600;
 
 
 // =====================================================
@@ -111,6 +132,25 @@ function Monitoring() {
 
 
     // -------------------------------------------------
+    // Eye / drowsiness confirmation timers
+    // -------------------------------------------------
+
+    const eyesClosedStartRef =
+        useRef(null);
+
+    const drowsinessStartRef =
+        useRef(null);
+
+
+    // -------------------------------------------------
+    // Yawn confirmation timer
+    // -------------------------------------------------
+
+    const yawnConfirmStartRef =
+        useRef(null);
+
+
+    // -------------------------------------------------
     // Unsafe condition timers
     // -------------------------------------------------
 
@@ -132,6 +172,12 @@ function Monitoring() {
         useRef(0);
 
     const lastPhoneAlertRef =
+        useRef(0);
+
+    const lastDrowsinessAlertRef =
+        useRef(0);
+
+    const lastYawnAlertRef =
         useRef(0);
 
 
@@ -293,8 +339,7 @@ function Monitoring() {
             vertical2
         ) /
         (
-            2 *
-            horizontal
+            2 * horizontal
         );
     };
 
@@ -343,10 +388,10 @@ function Monitoring() {
 
 
         /*
-         * EAR below 0.110 means eyes are closed.
+         * EAR below 0.110 means
+         * eyes are considered closed.
          *
-         * A value of 0 is treated as invalid rather
-         * than automatically calling it closed.
+         * A value of 0 is invalid.
          */
 
         const closed =
@@ -380,6 +425,15 @@ function Monitoring() {
 
         attentionStartRef.current =
             null;
+
+        eyesClosedStartRef.current =
+            null;
+
+        drowsinessStartRef.current =
+            null;
+
+        yawnConfirmStartRef.current =
+            null;
     };
 
 
@@ -396,6 +450,12 @@ function Monitoring() {
             0;
 
         lastPhoneAlertRef.current =
+            0;
+
+        lastDrowsinessAlertRef.current =
+            0;
+
+        lastYawnAlertRef.current =
             0;
     };
 
@@ -463,7 +523,6 @@ function Monitoring() {
                 setLastAlert(
                     "Head pose alert"
                 );
-
             }
         }
     };
@@ -532,7 +591,6 @@ function Monitoring() {
                 setLastAlert(
                     "Attention alert"
                 );
-
             }
         }
     };
@@ -580,8 +638,285 @@ function Monitoring() {
                 setLastAlert(
                     "Phone detected"
                 );
-
             }
+        }
+    };
+
+
+    // =================================================
+    // DROWSINESS
+    // =================================================
+
+    const processDrowsiness = (
+        eyesAreClosed,
+        now
+    ) => {
+
+        /*
+         * First reset when eyes are open.
+         */
+
+        if (!eyesAreClosed) {
+
+            eyesClosedStartRef.current =
+                null;
+
+            drowsinessStartRef.current =
+                null;
+
+            setEyesClosed(false);
+
+            setDrowsy(false);
+
+            return;
+        }
+
+
+        /*
+         * Start eye-closure timer.
+         */
+
+        if (
+            eyesClosedStartRef.current ===
+            null
+        ) {
+
+            eyesClosedStartRef.current =
+                now;
+        }
+
+
+        const eyeClosedDuration =
+            now -
+            eyesClosedStartRef.current;
+
+
+        /*
+         * Eyes are only confirmed closed
+         * after 300 ms.
+         */
+
+        const confirmedClosed =
+            eyeClosedDuration >=
+            EYE_CLOSURE_CONFIRM_TIME;
+
+
+        setEyesClosed(
+            confirmedClosed
+        );
+
+
+        /*
+         * Before 300 ms:
+         * treat as possible blink.
+         */
+
+        if (!confirmedClosed) {
+
+            drowsinessStartRef.current =
+                null;
+
+            setDrowsy(false);
+
+            return;
+        }
+
+
+        /*
+         * Start drowsiness timer only
+         * after eye closure is confirmed.
+         */
+
+        if (
+            drowsinessStartRef.current ===
+            null
+        ) {
+
+            drowsinessStartRef.current =
+                now;
+        }
+
+
+        const drowsinessDuration =
+            now -
+            drowsinessStartRef.current;
+
+
+        /*
+         * Drowsiness confirmed after
+         * 600 ms of confirmed eye closure.
+         */
+
+        const confirmedDrowsy =
+            drowsinessDuration >=
+            DROWSINESS_CONFIRM_TIME;
+
+
+        setDrowsy(
+            confirmedDrowsy
+        );
+
+
+        /*
+         * Keep the existing risk engine synchronized.
+         */
+
+        updateDrowsiness(
+            confirmedDrowsy,
+            Date.now()
+        );
+
+
+        /*
+         * Generate audio alert.
+         */
+
+        if (
+            confirmedDrowsy
+        ) {
+
+            const cooldownPassed =
+                now -
+                lastDrowsinessAlertRef.current >=
+                CONDITION_ALERT_COOLDOWN;
+
+
+            if (cooldownPassed) {
+
+                const spoken =
+                    speakDrowsinessAlert();
+
+
+                if (spoken) {
+
+                    lastDrowsinessAlertRef.current =
+                        now;
+
+                    setLastAlert(
+                        "Drowsiness alert"
+                    );
+                }
+            }
+        }
+    };
+
+
+    // =================================================
+    // YAWN
+    // =================================================
+
+    const processYawning = (
+        landmarks,
+        now
+    ) => {
+
+        /*
+         * Keep the original detector running.
+         * Its MAR value is displayed in the UI.
+         */
+
+        const yawnResult =
+            detectYawn(
+                landmarks,
+                now
+            );
+
+
+        const mar =
+            Number(
+                yawnResult?.mar || 0
+            );
+
+
+        setMouthMAR(
+            mar
+        );
+
+
+        /*
+         * Local faster confirmation:
+         *
+         * MAR > 0.250
+         * continuously for 600 ms
+         */
+
+        const mouthOpen =
+            mar >
+            YAWN_MAR_THRESHOLD;
+
+
+        if (!mouthOpen) {
+
+            yawnConfirmStartRef.current =
+                null;
+
+            setYawning(false);
+
+            return;
+        }
+
+
+        /*
+         * Start observation.
+         */
+
+        if (
+            yawnConfirmStartRef.current ===
+            null
+        ) {
+
+            yawnConfirmStartRef.current =
+                now;
+
+            setYawning(false);
+
+            return;
+        }
+
+
+        const openDuration =
+            now -
+            yawnConfirmStartRef.current;
+
+
+        /*
+         * Confirm yawning after 600 ms.
+         */
+
+        if (
+            openDuration >=
+            YAWN_CONFIRM_TIME
+        ) {
+
+            setYawning(true);
+
+
+            const cooldownPassed =
+                now -
+                lastYawnAlertRef.current >=
+                CONDITION_ALERT_COOLDOWN;
+
+
+            if (cooldownPassed) {
+
+                const spoken =
+                    speakYawningAlert();
+
+
+                if (spoken) {
+
+                    lastYawnAlertRef.current =
+                        now;
+
+                    setLastAlert(
+                        "Yawning detected"
+                    );
+                }
+            }
+
+        } else {
+
+            setYawning(false);
         }
     };
 
@@ -635,9 +970,11 @@ function Monitoring() {
 
                 await initializePhoneDetector();
 
+
                 setPhoneDetectionReady(
                     true
                 );
+
 
                 console.log(
                     "Phone detector ready"
@@ -649,6 +986,7 @@ function Monitoring() {
                     "Phone detector failed:",
                     error
                 );
+
 
                 setPhoneDetectionReady(
                     false
@@ -667,6 +1005,7 @@ function Monitoring() {
                 error
             );
 
+
             setAiError(
                 "AI engine could not be initialized. Please check the Face Landmarker model."
             );
@@ -675,7 +1014,6 @@ function Monitoring() {
 
             aiInitializingRef.current =
                 false;
-
         }
     };
 
@@ -694,7 +1032,7 @@ function Monitoring() {
 
 
             // -----------------------------------------
-            // Unlock audio directly from button click.
+            // Unlock audio
             // -----------------------------------------
 
             unlockAudio();
@@ -808,7 +1146,6 @@ function Monitoring() {
                         },
 
                         audio: false,
-
                     }
                 );
 
@@ -827,7 +1164,6 @@ function Monitoring() {
                     stream;
 
                 await videoRef.current.play();
-
             }
 
 
@@ -847,10 +1183,10 @@ function Monitoring() {
                 error
             );
 
+
             setCameraError(
                 "Camera access was denied or is unavailable. Please allow camera permission and try again."
             );
-
         }
     };
 
@@ -875,7 +1211,6 @@ function Monitoring() {
 
             animationFrameRef.current =
                 null;
-
         }
 
 
@@ -893,9 +1228,9 @@ function Monitoring() {
                     }
                 );
 
+
             streamRef.current =
                 null;
-
         }
 
 
@@ -909,7 +1244,6 @@ function Monitoring() {
 
             videoRef.current.srcObject =
                 null;
-
         }
 
 
@@ -984,7 +1318,6 @@ function Monitoring() {
         resetConditionTimers();
 
         resetAlertTimers();
-
     };
 
 
@@ -1017,9 +1350,7 @@ function Monitoring() {
             lastPhoneDetectionRef.current <
             PHONE_DETECTION_INTERVAL
         ) {
-
             return;
-
         }
 
 
@@ -1060,15 +1391,11 @@ function Monitoring() {
                 detected
             );
 
+
             setPhoneConfidence(
                 confidence
             );
 
-
-            // -----------------------------------------
-            // Process alert immediately when a
-            // positive detection is returned.
-            // -----------------------------------------
 
             processPhoneAlert(
                 detected,
@@ -1086,7 +1413,6 @@ function Monitoring() {
 
             phoneDetectionRunningRef.current =
                 false;
-
         }
     };
 
@@ -1102,9 +1428,7 @@ function Monitoring() {
             !aiReady ||
             !cameraActive
         ) {
-
             return;
-
         }
 
 
@@ -1122,7 +1446,6 @@ function Monitoring() {
                 );
 
             return;
-
         }
 
 
@@ -1131,7 +1454,7 @@ function Monitoring() {
 
 
         // ---------------------------------------------
-        // Don't process same video frame twice.
+        // Don't process same video frame twice
         // ---------------------------------------------
 
         if (
@@ -1179,9 +1502,9 @@ function Monitoring() {
                     );
 
 
-                    // ---------------------------------
-                    // Eye state
-                    // ---------------------------------
+                    // =================================
+                    // EYES
+                    // =================================
 
                     const eyeState =
                         calculateEyeState(
@@ -1194,14 +1517,15 @@ function Monitoring() {
                     );
 
 
-                    setEyesClosed(
-                        eyeState.eyesClosed
+                    processDrowsiness(
+                        eyeState.eyesClosed,
+                        now
                     );
 
 
-                    // ---------------------------------
-                    // Head pose
-                    // ---------------------------------
+                    // =================================
+                    // HEAD POSE
+                    // =================================
 
                     const headPose =
                         detectHeadPose(
@@ -1231,130 +1555,27 @@ function Monitoring() {
                         );
 
 
-                        // -----------------------------
-                        // Head pose alert
-                        // -----------------------------
-
                         processHeadPoseAlert(
                             direction,
                             now
                         );
 
 
-                        // -----------------------------
-                        // Attention alert
-                        // -----------------------------
-
                         processAttentionAlert(
                             currentAttention,
                             now
                         );
-
-                    }
-
-
-                    // =================================
-                    // DROWSINESS
-                    // =================================
-
-                    const risk =
-                        updateDrowsiness(
-                            eyeState.eyesClosed
-                        );
-
-
-                    if (risk) {
-
-                        const currentDrowsy =
-                            risk.state ===
-                            "drowsy";
-
-
-                        setDrowsy(
-                            currentDrowsy
-                        );
-
-
-                        if (
-                            risk.shouldAlert
-                        ) {
-
-                            const spoken =
-                                speakDrowsinessAlert();
-
-
-                            if (spoken) {
-
-                                setLastAlert(
-                                    "Drowsiness alert"
-                                );
-
-                            }
-
-                        }
-
                     }
 
 
                     // =================================
                     // YAWNING
-                    //
-                    // yawnDetection.js should use:
-                    //
-                    // MAR > 0.250
-                    //
-                    // while still requiring the
-                    // configured observation period
-                    // (currently 1200 ms).
                     // =================================
 
-                    const yawnResult =
-                        detectYawn(
-                            landmarks,
-                            now
-                        );
-
-
-                    setMouthMAR(
-                        Number(
-                            yawnResult.mar ||
-                            0
-                        )
+                    processYawning(
+                        landmarks,
+                        now
                     );
-
-
-                    setYawning(
-                        Boolean(
-                            yawnResult.yawning
-                        )
-                    );
-
-
-                    if (
-                        yawnResult.yawning
-                    ) {
-
-                        /*
-                         * The yawn detector itself
-                         * controls its cooldown.
-                         *
-                         * Therefore the speech function
-                         * also has its own cooldown.
-                         */
-
-                        const spoken =
-                            speakYawningAlert();
-
-
-                        if (spoken) {
-
-                            setLastAlert(
-                                "Yawning detected"
-                            );
-
-                        }
-
-                    }
 
                 } else {
 
@@ -1396,15 +1617,14 @@ function Monitoring() {
 
 
                     updateDrowsiness(
-                        false
+                        false,
+                        Date.now()
                     );
 
 
                     resetYawnDetection();
 
-
                     resetConditionTimers();
-
                 }
 
 
@@ -1420,8 +1640,8 @@ function Monitoring() {
                         video,
                         now
                     );
-
                 }
+
 
             } catch (error) {
 
@@ -1429,9 +1649,7 @@ function Monitoring() {
                     "AI frame processing error:",
                     error
                 );
-
             }
-
         }
 
 
@@ -1443,7 +1661,6 @@ function Monitoring() {
             requestAnimationFrame(
                 runAI
             );
-
     };
 
 
@@ -1456,7 +1673,6 @@ function Monitoring() {
         return () => {
 
             stopCamera();
-
         };
 
     }, []);
@@ -1480,7 +1696,6 @@ function Monitoring() {
                 cancelAnimationFrame(
                     animationFrameRef.current
                 );
-
             }
 
 
@@ -1488,7 +1703,6 @@ function Monitoring() {
                 requestAnimationFrame(
                     runAI
                 );
-
         }
 
 
@@ -1504,9 +1718,7 @@ function Monitoring() {
 
                 animationFrameRef.current =
                     null;
-
             }
-
         };
 
     }, [
@@ -1535,7 +1747,6 @@ function Monitoring() {
         }
 
         return "CRITICAL";
-
     };
 
 
@@ -1950,8 +2161,8 @@ function Monitoring() {
 
 
                         <small>
-                            Below 0.110 indicates
-                            closed eyes.
+                            Below 0.110 + 300 ms
+                            confirms closed eyes.
                         </small>
 
                     </div>
@@ -1974,7 +2185,7 @@ function Monitoring() {
 
 
                         <small>
-                            Above 0.250 for 1.2 seconds
+                            Above 0.250 + 600 ms
                             confirms yawning.
                         </small>
 
@@ -2056,7 +2267,6 @@ function Monitoring() {
                                 Audio alerts enabled
                             </strong>
 
-
                             <p>
                                 Voice warnings will be
                                 played when unsafe
@@ -2091,7 +2301,6 @@ function Monitoring() {
             </section>
 
         </main>
-
     );
 }
 
@@ -2142,7 +2351,6 @@ function Detection({
             ></i>
 
         </div>
-
     );
 }
 

@@ -1,24 +1,32 @@
+
 // src/ai/yawnDetection.js
 
 let yawnStartTime = null;
 let lastYawnTime = 0;
 
-// Mouth opening threshold.
-// This may need adjustment depending on camera position.
-const YAWN_MAR_THRESHOLD = 0.55;
 
-// Mouth must remain open for this long.
-const YAWN_DURATION = 1200;
+// =====================================================
+// CONFIGURATION
+// =====================================================
 
-// Prevent repeated yawn alerts.
+// Mouth Aspect Ratio above this value is considered
+// sufficiently open for possible yawning.
+const YAWN_MAR_THRESHOLD = 0.250;
+
+// Mouth must remain above the threshold for 600 ms
+// before a yawn is confirmed.
+const YAWN_DURATION = 600;
+
+// Prevent repeated yawn confirmations.
 const YAWN_COOLDOWN = 5000;
 
 
-// ---------------------------------------------
-// Distance between two landmarks
-// ---------------------------------------------
+// =====================================================
+// DISTANCE
+// =====================================================
 
 function distance(p1, p2) {
+
     if (!p1 || !p2) {
         return 0;
     }
@@ -32,14 +40,14 @@ function distance(p1, p2) {
 }
 
 
-// ---------------------------------------------
-// Calculate Mouth Aspect Ratio
-// ---------------------------------------------
+// =====================================================
+// CALCULATE MOUTH ASPECT RATIO
+// =====================================================
 
 function calculateMAR(landmarks) {
 
     /*
-        MediaPipe Face Landmarker mouth points
+        MediaPipe Face Landmarker mouth points:
 
         61  = left mouth corner
         291 = right mouth corner
@@ -47,7 +55,6 @@ function calculateMAR(landmarks) {
         13  = upper inner lip
         14  = lower inner lip
 
-        Additional vertical points:
         82  = upper mouth
         312 = lower mouth
     */
@@ -61,6 +68,7 @@ function calculateMAR(landmarks) {
     const upper2 = landmarks[82];
     const lower2 = landmarks[312];
 
+
     if (
         !left ||
         !right ||
@@ -72,11 +80,17 @@ function calculateMAR(landmarks) {
         return 0;
     }
 
-    const horizontal = distance(left, right);
+
+    const horizontal = distance(
+        left,
+        right
+    );
+
 
     if (horizontal === 0) {
         return 0;
     }
+
 
     const vertical1 = distance(
         upper,
@@ -88,6 +102,7 @@ function calculateMAR(landmarks) {
         lower2
     );
 
+
     return (
         (vertical1 + vertical2) /
         (2 * horizontal)
@@ -95,41 +110,70 @@ function calculateMAR(landmarks) {
 }
 
 
-// ---------------------------------------------
-// Detect yawning
-// ---------------------------------------------
+// =====================================================
+// DETECT YAWN
+// =====================================================
 
-export function detectYawn(landmarks, now = performance.now()) {
+export function detectYawn(
+    landmarks,
+    now = performance.now()
+) {
 
     if (
         !landmarks ||
         landmarks.length === 0
     ) {
+
+        yawnStartTime = null;
+
         return {
             yawning: false,
             mar: 0,
         };
     }
 
-    const mar = calculateMAR(landmarks);
 
-    // Mouth is sufficiently open
-    if (mar >= YAWN_MAR_THRESHOLD) {
+    const mar = calculateMAR(
+        landmarks
+    );
 
-        if (yawnStartTime === null) {
+
+    // =================================================
+    // MOUTH OPEN
+    // =================================================
+
+    if (
+        mar > YAWN_MAR_THRESHOLD
+    ) {
+
+        // Start observation
+        if (
+            yawnStartTime === null
+        ) {
+
             yawnStartTime = now;
+
         }
+
 
         const openDuration =
             now - yawnStartTime;
 
-        // Mouth has remained open long enough
+
+        // =================================================
+        // CONFIRM YAWN
+        // =================================================
+
         if (
             openDuration >= YAWN_DURATION &&
             now - lastYawnTime >= YAWN_COOLDOWN
         ) {
 
             lastYawnTime = now;
+
+            console.log(
+                `😮 YAWN CONFIRMED | MAR: ${mar.toFixed(3)}`
+            );
 
             return {
                 yawning: true,
@@ -139,9 +183,11 @@ export function detectYawn(landmarks, now = performance.now()) {
 
     } else {
 
-        // Mouth closed again
+        // Mouth closed / below threshold.
+        // Reset observation.
         yawnStartTime = null;
     }
+
 
     return {
         yawning: false,
@@ -150,13 +196,14 @@ export function detectYawn(landmarks, now = performance.now()) {
 }
 
 
-// ---------------------------------------------
-// Reset
-// ---------------------------------------------
+// =====================================================
+// RESET
+// =====================================================
 
 export function resetYawnDetection() {
 
     yawnStartTime = null;
-    lastYawnTime = 0;
 
+    lastYawnTime = 0;
 }
+

@@ -1,3 +1,4 @@
+
 // src/pages/Monitoring.jsx
 
 import {
@@ -51,20 +52,49 @@ import {
 // Phone detection interval
 const PHONE_DETECTION_INTERVAL = 1000;
 
-// Unsafe head pose must remain for this long
-// before alerting. Lowered so head-pose alerts fire sooner.
-const HEAD_POSE_DELAY = 600;
+// Head pose must remain unsafe before alert
+const HEAD_POSE_DELAY = 900;
 
-// Distracted attention must remain for this long.
-const ATTENTION_DELAY = 1500;
+// Attention must remain distracted before alert
+const ATTENTION_DELAY = 1800;
 
-// Minimum time between alerts of the same type
-// (head pose / attention only — drowsiness and yawning
-// already debounce themselves inside their own modules).
-const CONDITION_ALERT_COOLDOWN = 7000;
+// Minimum time between same condition alerts
+const CONDITION_ALERT_COOLDOWN = 8000;
 
-// Eye closure threshold
+// -----------------------------------------------------
+// MOBILE STABILITY
+// -----------------------------------------------------
+
+// EAR threshold for closed eyes
 const EYE_CLOSURE_THRESHOLD = 0.20;
+
+// EAR values are averaged over several frames
+// to reduce mobile camera noise.
+const EAR_HISTORY_SIZE = 5;
+
+// Number of consecutive closed-eye frames required
+// before sending the value to the drowsiness engine.
+const DROWSINESS_CONFIRM_FRAMES = 4;
+
+// Number of consecutive open-eye frames required
+// before clearing a temporary closed-eye state.
+const DROWSINESS_CLEAR_FRAMES = 3;
+
+// MAR smoothing
+const MAR_HISTORY_SIZE = 5;
+
+// Number of frames required before considering
+// mouth state stable.
+const YAWN_CONFIRM_FRAMES = 3;
+
+// -----------------------------------------------------
+// FACE LOSS TOLERANCE
+// -----------------------------------------------------
+
+// Mobile cameras can temporarily lose landmarks
+// for a few frames. Do not immediately reset
+// drowsiness/yawning state.
+const FACE_LOSS_TOLERANCE = 900;
 
 
 // =====================================================
@@ -73,11 +103,12 @@ const EYE_CLOSURE_THRESHOLD = 0.20;
 
 function Monitoring() {
 
-    // -------------------------------------------------
-    // DOM / animation references
-    // -------------------------------------------------
+    // =================================================
+    // DOM / ANIMATION REFERENCES
+    // =================================================
 
     const videoRef = useRef(null);
+
     const streamRef = useRef(null);
 
     const animationFrameRef =
@@ -90,9 +121,9 @@ function Monitoring() {
         useRef(false);
 
 
-    // -------------------------------------------------
-    // Phone detection references
-    // -------------------------------------------------
+    // =================================================
+    // PHONE DETECTION REFERENCES
+    // =================================================
 
     const lastPhoneDetectionRef =
         useRef(0);
@@ -101,12 +132,9 @@ function Monitoring() {
         useRef(false);
 
 
-    // -------------------------------------------------
-    // Unsafe condition timers
-    // (only head pose / attention need local timers —
-    // drowsiness and yawning are already debounced
-    // inside riskEngine.js / yawnDetection.js)
-    // -------------------------------------------------
+    // =================================================
+    // CONDITION TIMERS
+    // =================================================
 
     const headPoseStartRef =
         useRef(null);
@@ -115,9 +143,9 @@ function Monitoring() {
         useRef(null);
 
 
-    // -------------------------------------------------
-    // Last alert timestamps
-    // -------------------------------------------------
+    // =================================================
+    // ALERT TIMERS
+    // =================================================
 
     const lastHeadPoseAlertRef =
         useRef(0);
@@ -129,12 +157,48 @@ function Monitoring() {
         useRef(0);
 
 
-    // -------------------------------------------------
-    // Phone state reference
-    // -------------------------------------------------
+    // =================================================
+    // PHONE STATE
+    // =================================================
 
     const phoneDetectedRef =
         useRef(false);
+
+
+    // =================================================
+    // MOBILE EAR STABILIZATION
+    // =================================================
+
+    const earHistoryRef =
+        useRef([]);
+
+    const closedEyeFramesRef =
+        useRef(0);
+
+    const openEyeFramesRef =
+        useRef(0);
+
+    const stableEyesClosedRef =
+        useRef(false);
+
+
+    // =================================================
+    // MOBILE MAR STABILIZATION
+    // =================================================
+
+    const marHistoryRef =
+        useRef([]);
+
+    const mouthOpenFramesRef =
+        useRef(0);
+
+
+    // =================================================
+    // FACE LOSS TOLERANCE
+    // =================================================
+
+    const lastFaceSeenRef =
+        useRef(0);
 
 
     // =================================================
@@ -199,6 +263,10 @@ function Monitoring() {
 
     const distance = (p1, p2) => {
 
+        if (!p1 || !p2) {
+            return 0;
+        }
+
         const dx =
             p1.x - p2.x;
 
@@ -206,7 +274,8 @@ function Monitoring() {
             p1.y - p2.y;
 
         return Math.sqrt(
-            dx * dx + dy * dy
+            dx * dx +
+            dy * dy
         );
     };
 
@@ -247,6 +316,7 @@ function Monitoring() {
             !p5 ||
             !p6
         ) {
+
             return 0;
         }
 
@@ -261,7 +331,10 @@ function Monitoring() {
             distance(p1, p4);
 
 
-        if (horizontal === 0) {
+        if (
+            horizontal <= 0
+        ) {
+
             return 0;
         }
 
@@ -270,7 +343,60 @@ function Monitoring() {
             vertical1 +
             vertical2
         ) / (
-            2 * horizontal
+            2 *
+            horizontal
+        );
+    };
+
+
+    // =================================================
+    // SMOOTH EAR
+    // =================================================
+
+    const smoothEAR = (value) => {
+
+        if (
+            !Number.isFinite(value) ||
+            value <= 0
+        ) {
+
+            return (
+                earHistoryRef.current.length
+                    ? earHistoryRef.current[
+                        earHistoryRef.current.length - 1
+                    ]
+                    : 0
+            );
+        }
+
+
+        const history =
+            earHistoryRef.current;
+
+
+        history.push(value);
+
+
+        if (
+            history.length >
+            EAR_HISTORY_SIZE
+        ) {
+
+            history.shift();
+        }
+
+
+        const sum =
+            history.reduce(
+                (total, item) =>
+                    total + item,
+                0
+            );
+
+
+        return (
+            sum /
+            history.length
         );
     };
 
@@ -311,20 +437,187 @@ function Monitoring() {
             );
 
 
-        const averageEAR =
-            (
-                leftEAR +
-                rightEAR
-            ) / 2;
+        let rawAverageEAR = 0;
 
-        const closed = averageEAR > 0 && averageEAR < EYE_CLOSURE_THRESHOLD;
+
+        if (
+            leftEAR > 0 &&
+            rightEAR > 0
+        ) {
+
+            rawAverageEAR =
+                (
+                    leftEAR +
+                    rightEAR
+                ) / 2;
+
+        } else if (
+            leftEAR > 0
+        ) {
+
+            rawAverageEAR =
+                leftEAR;
+
+        } else if (
+            rightEAR > 0
+        ) {
+
+            rawAverageEAR =
+                rightEAR;
+        }
+
+
+        const averageEAR =
+            smoothEAR(
+                rawAverageEAR
+            );
+
+
+        const currentlyClosed =
+            averageEAR > 0 &&
+            averageEAR <
+            EYE_CLOSURE_THRESHOLD;
+
+
+        // ---------------------------------------------
+        // Consecutive-frame confirmation
+        // ---------------------------------------------
+
+        if (currentlyClosed) {
+
+            closedEyeFramesRef.current += 1;
+
+            openEyeFramesRef.current = 0;
+
+        } else {
+
+            openEyeFramesRef.current += 1;
+
+            closedEyeFramesRef.current = 0;
+        }
+
+
+        // ---------------------------------------------
+        // Confirm closed state
+        // ---------------------------------------------
+
+        if (
+            closedEyeFramesRef.current >=
+            DROWSINESS_CONFIRM_FRAMES
+        ) {
+
+            stableEyesClosedRef.current =
+                true;
+        }
+
+
+        // ---------------------------------------------
+        // Clear closed state
+        // ---------------------------------------------
+
+        if (
+            openEyeFramesRef.current >=
+            DROWSINESS_CLEAR_FRAMES
+        ) {
+
+            stableEyesClosedRef.current =
+                false;
+        }
+
 
         return {
+
             leftEAR,
+
             rightEAR,
+
             averageEAR,
-            eyesClosed: closed,
+
+            eyesClosed:
+                stableEyesClosedRef.current,
+
         };
+    };
+
+
+    // =================================================
+    // SMOOTH MAR
+    // =================================================
+
+    const smoothMAR = (value) => {
+
+        if (
+            !Number.isFinite(value) ||
+            value < 0
+        ) {
+
+            return (
+                marHistoryRef.current.length
+                    ? marHistoryRef.current[
+                        marHistoryRef.current.length - 1
+                    ]
+                    : 0
+            );
+        }
+
+
+        const history =
+            marHistoryRef.current;
+
+
+        history.push(value);
+
+
+        if (
+            history.length >
+            MAR_HISTORY_SIZE
+        ) {
+
+            history.shift();
+        }
+
+
+        const sum =
+            history.reduce(
+                (total, item) =>
+                    total + item,
+                0
+            );
+
+
+        return (
+            sum /
+            history.length
+        );
+    };
+
+
+    // =================================================
+    // RESET STABILITY
+    // =================================================
+
+    const resetStability = () => {
+
+        earHistoryRef.current =
+            [];
+
+        marHistoryRef.current =
+            [];
+
+        closedEyeFramesRef.current =
+            0;
+
+        openEyeFramesRef.current =
+            0;
+
+        stableEyesClosedRef.current =
+            false;
+
+        mouthOpenFramesRef.current =
+            0;
+
+        lastFaceSeenRef.current =
+            0;
     };
 
 
@@ -370,7 +663,8 @@ function Monitoring() {
 
         const unsafe =
             direction &&
-            direction !== "Center";
+            direction !== "Center" &&
+            direction !== "Not detected";
 
 
         if (!unsafe) {
@@ -406,18 +700,24 @@ function Monitoring() {
 
 
         if (
-            duration >= HEAD_POSE_DELAY &&
+            duration >=
+            HEAD_POSE_DELAY &&
             cooldownPassed
         ) {
 
-            speakHeadPoseAlert();
+            const spoken =
+                speakHeadPoseAlert();
 
-            lastHeadPoseAlertRef.current =
-                now;
 
-            setLastAlert(
-                "Head pose alert"
-            );
+            if (spoken) {
+
+                lastHeadPoseAlertRef.current =
+                    now;
+
+                setLastAlert(
+                    "Head pose alert"
+                );
+            }
         }
     };
 
@@ -433,7 +733,8 @@ function Monitoring() {
 
         const distracted =
             currentAttention &&
-            currentAttention !== "Focused";
+            currentAttention !== "Focused" &&
+            currentAttention !== "Not detected";
 
 
         if (!distracted) {
@@ -469,18 +770,24 @@ function Monitoring() {
 
 
         if (
-            duration >= ATTENTION_DELAY &&
+            duration >=
+            ATTENTION_DELAY &&
             cooldownPassed
         ) {
 
-            speakAttentionAlert();
+            const spoken =
+                speakAttentionAlert();
 
-            lastAttentionAlertRef.current =
-                now;
 
-            setLastAlert(
-                "Attention alert"
-            );
+            if (spoken) {
+
+                lastAttentionAlertRef.current =
+                    now;
+
+                setLastAlert(
+                    "Attention alert"
+                );
+            }
         }
     };
 
@@ -515,14 +822,19 @@ function Monitoring() {
 
         if (cooldownPassed) {
 
-            speakPhoneAlert();
+            const spoken =
+                speakPhoneAlert();
 
-            lastPhoneAlertRef.current =
-                now;
 
-            setLastAlert(
-                "Phone detected"
-            );
+            if (spoken) {
+
+                lastPhoneAlertRef.current =
+                    now;
+
+                setLastAlert(
+                    "Phone detected"
+                );
+            }
         }
     };
 
@@ -536,11 +848,13 @@ function Monitoring() {
         if (
             aiInitializingRef.current
         ) {
+
             return;
         }
 
 
         if (aiReady) {
+
             return;
         }
 
@@ -561,11 +875,13 @@ function Monitoring() {
             await initializeFaceLandmarker();
 
 
-            setAiReady(true);
+            setAiReady(
+                true
+            );
 
 
             // -----------------------------------------
-            // Phone detector
+            // PHONE DETECTOR
             // -----------------------------------------
 
             try {
@@ -625,23 +941,25 @@ function Monitoring() {
         try {
 
             setCameraError("");
+
             setAiError("");
 
 
             // -----------------------------------------
-            // IMPORTANT:
-            // Unlock audio directly from button click.
+            // Unlock audio directly from user click
             // -----------------------------------------
 
             unlockAudio();
 
 
             // -----------------------------------------
-            // Reset engines
+            // Reset AI engines
             // -----------------------------------------
 
             resetRiskEngine();
+
             resetAudioAlerts();
+
             resetYawnDetection();
 
 
@@ -681,7 +999,7 @@ function Monitoring() {
 
 
             // -----------------------------------------
-            // Reset references
+            // Reset refs
             // -----------------------------------------
 
             lastVideoTimeRef.current =
@@ -699,6 +1017,8 @@ function Monitoring() {
             resetConditionTimers();
 
             resetAlertTimers();
+
+            resetStability();
 
 
             // -----------------------------------------
@@ -737,6 +1057,11 @@ function Monitoring() {
                             height: {
                                 ideal: 720,
                             },
+
+                            frameRate: {
+                                ideal: 30,
+                                max: 30,
+                            },
                         },
 
                         audio: false,
@@ -761,7 +1086,9 @@ function Monitoring() {
             }
 
 
-            setCameraActive(true);
+            setCameraActive(
+                true
+            );
 
 
             // -----------------------------------------
@@ -808,16 +1135,20 @@ function Monitoring() {
 
 
         // ---------------------------------------------
-        // Stop camera tracks
+        // Stop camera
         // ---------------------------------------------
 
-        if (streamRef.current) {
+        if (
+            streamRef.current
+        ) {
 
             streamRef.current
                 .getTracks()
-                .forEach((track) => {
-                    track.stop();
-                });
+                .forEach(
+                    (track) => {
+                        track.stop();
+                    }
+                );
 
             streamRef.current =
                 null;
@@ -828,7 +1159,9 @@ function Monitoring() {
         // Clear video
         // ---------------------------------------------
 
-        if (videoRef.current) {
+        if (
+            videoRef.current
+        ) {
 
             videoRef.current.pause();
 
@@ -838,7 +1171,7 @@ function Monitoring() {
 
 
         // ---------------------------------------------
-        // Reset AI
+        // Reset engines
         // ---------------------------------------------
 
         resetRiskEngine();
@@ -908,6 +1241,8 @@ function Monitoring() {
         resetConditionTimers();
 
         resetAlertTimers();
+
+        resetStability();
     };
 
 
@@ -920,22 +1255,20 @@ function Monitoring() {
         now
     ) => {
 
-        // ---------------------------------------------
-        // Prevent overlapping detections
-        // ---------------------------------------------
-
         if (
             phoneDetectionRunningRef.current
         ) {
+
             return;
         }
 
 
-        // ---------------------------------------------
-        // Interval
-        // ---------------------------------------------
+        if (
+            now -
+            lastPhoneDetectionRef.current <
+            PHONE_DETECTION_INTERVAL
+        ) {
 
-        if (now - lastPhoneDetectionRef.current < PHONE_DETECTION_INTERVAL) {
             return;
         }
 
@@ -950,10 +1283,13 @@ function Monitoring() {
         try {
 
             const phoneResult =
-                await detectPhone(video);
+                await detectPhone(
+                    video
+                );
 
 
             if (!phoneResult) {
+
                 return;
             }
 
@@ -979,10 +1315,6 @@ function Monitoring() {
                 confidence
             );
 
-
-            // -----------------------------------------
-            // Alert only after result returns.
-            // -----------------------------------------
 
             processPhoneAlert(
                 detected,
@@ -1015,6 +1347,7 @@ function Monitoring() {
             !aiReady ||
             !cameraActive
         ) {
+
             return;
         }
 
@@ -1041,7 +1374,7 @@ function Monitoring() {
 
 
         // ---------------------------------------------
-        // Don't process the same video frame twice
+        // Avoid processing duplicate frame
         // ---------------------------------------------
 
         if (
@@ -1081,6 +1414,10 @@ function Monitoring() {
                     0
                 ) {
 
+                    lastFaceSeenRef.current =
+                        now;
+
+
                     const landmarks =
                         result.faceLandmarks[0];
 
@@ -1090,9 +1427,9 @@ function Monitoring() {
                     );
 
 
-                    // ---------------------------------
-                    // Eye state
-                    // ---------------------------------
+                    // =================================
+                    // EYE STATE
+                    // =================================
 
                     const eyeState =
                         calculateEyeState(
@@ -1110,9 +1447,9 @@ function Monitoring() {
                     );
 
 
-                    // ---------------------------------
-                    // Head pose
-                    // ---------------------------------
+                    // =================================
+                    // HEAD POSE
+                    // =================================
 
                     const headPose =
                         detectHeadPose(
@@ -1125,6 +1462,7 @@ function Monitoring() {
                         const direction =
                             headPose.direction ||
                             "Not detected";
+
 
                         const currentAttention =
                             headPose.attention ||
@@ -1140,36 +1478,43 @@ function Monitoring() {
                         );
 
 
-                        // -----------------------------
-                        // Head pose alert
-                        // -----------------------------
-
                         processHeadPoseAlert(
                             direction,
                             now
                         );
 
 
-                        // -----------------------------
-                        // Attention alert
-                        // -----------------------------
-
                         processAttentionAlert(
                             currentAttention,
                             now
                         );
+
+                    } else {
+
+                        // Do not instantly reset
+                        // because of one bad frame.
+
+                        if (
+                            now -
+                            lastFaceSeenRef.current >
+                            FACE_LOSS_TOLERANCE
+                        ) {
+
+                            setHeadDirection(
+                                "Not detected"
+                            );
+
+                            setAttention(
+                                "Not detected"
+                            );
+
+                            resetConditionTimers();
+                        }
                     }
 
 
                     // =================================
                     // DROWSINESS
-                    //
-                    // riskEngine.updateDrowsiness() returns
-                    // { state, label, duration, shouldAlert } —
-                    // NOTE: there is no "drowsy" field, and
-                    // shouldAlert already has its own internal
-                    // cooldown, so we trust it directly instead
-                    // of re-implementing a second delay here.
                     // =================================
 
                     const risk =
@@ -1181,7 +1526,8 @@ function Monitoring() {
                     if (risk) {
 
                         const currentDrowsy =
-                            risk.state === "drowsy";
+                            risk.state ===
+                            "drowsy";
 
 
                         setDrowsy(
@@ -1193,23 +1539,22 @@ function Monitoring() {
                             risk.shouldAlert
                         ) {
 
-                            speakDrowsinessAlert();
+                            const spoken =
+                                speakDrowsinessAlert();
 
-                            setLastAlert(
-                                "Drowsiness alert"
-                            );
+
+                            if (spoken) {
+
+                                setLastAlert(
+                                    "Drowsiness alert"
+                                );
+                            }
                         }
                     }
 
 
                     // =================================
                     // YAWNING
-                    //
-                    // detectYawn() already debounces
-                    // internally (mouth must stay open
-                    // for YAWN_DURATION, plus its own
-                    // YAWN_COOLDOWN) — so we trust its
-                    // "yawning" flag directly.
                     // =================================
 
                     const yawnResult =
@@ -1219,77 +1564,149 @@ function Monitoring() {
                         );
 
 
-                    setMouthMAR(
-                        yawnResult.mar
-                    );
-
-
-                    setYawning(
-                        Boolean(
-                            yawnResult.yawning
-                        )
-                    );
-
-
                     if (
-                        yawnResult.yawning
+                        yawnResult
                     ) {
 
-                        speakYawningAlert();
+                        const rawMAR =
+                            Number(
+                                yawnResult.mar ||
+                                0
+                            );
 
-                        setLastAlert(
-                            "Yawning detected"
+
+                        const stableMAR =
+                            smoothMAR(
+                                rawMAR
+                            );
+
+
+                        setMouthMAR(
+                            stableMAR
                         );
+
+
+                        // ---------------------------------
+                        // Additional mobile confirmation
+                        // ---------------------------------
+
+                        const mouthIsOpen =
+                            stableMAR >
+                            0.55;
+
+
+                        if (
+                            mouthIsOpen
+                        ) {
+
+                            mouthOpenFramesRef.current +=
+                                1;
+
+                        } else {
+
+                            mouthOpenFramesRef.current =
+                                0;
+                        }
+
+
+                        const detectorYawning =
+                            Boolean(
+                                yawnResult.yawning
+                            );
+
+
+                        const confirmedYawn =
+                            detectorYawning &&
+                            mouthOpenFramesRef.current >=
+                            YAWN_CONFIRM_FRAMES;
+
+
+                        setYawning(
+                            confirmedYawn
+                        );
+
+
+                        if (
+                            confirmedYawn
+                        ) {
+
+                            const spoken =
+                                speakYawningAlert();
+
+
+                            if (spoken) {
+
+                                setLastAlert(
+                                    "Yawning detected"
+                                );
+                            }
+                        }
                     }
+
 
                 } else {
 
                     // =================================
-                    // NO FACE
+                    // TEMPORARY FACE LOSS
                     // =================================
 
-                    setFaceDetected(
-                        false
-                    );
-
-                    setEyesClosed(
-                        false
-                    );
-
-                    setDrowsy(
-                        false
-                    );
-
-                    setEyeEAR(
-                        0
-                    );
-
-                    setYawning(
-                        false
-                    );
-
-                    setMouthMAR(
-                        0
-                    );
-
-                    setHeadDirection(
-                        "Not detected"
-                    );
-
-                    setAttention(
-                        "Not detected"
-                    );
+                    const faceRecentlySeen =
+                        lastFaceSeenRef.current >
+                        0 &&
+                        now -
+                        lastFaceSeenRef.current <=
+                        FACE_LOSS_TOLERANCE;
 
 
-                    updateDrowsiness(
-                        false
-                    );
+                    if (
+                        !faceRecentlySeen
+                    ) {
 
-                    resetYawnDetection();
+                        setFaceDetected(
+                            false
+                        );
+
+                        setEyesClosed(
+                            false
+                        );
+
+                        setDrowsy(
+                            false
+                        );
+
+                        setEyeEAR(
+                            0
+                        );
+
+                        setYawning(
+                            false
+                        );
+
+                        setMouthMAR(
+                            0
+                        );
+
+                        setHeadDirection(
+                            "Not detected"
+                        );
+
+                        setAttention(
+                            "Not detected"
+                        );
 
 
-                    // Reset condition timers
-                    resetConditionTimers();
+                        updateDrowsiness(
+                            false
+                        );
+
+
+                        resetYawnDetection();
+
+                        resetConditionTimers();
+
+                        resetStability();
+                    }
+
                 }
 
 
@@ -1306,6 +1723,7 @@ function Monitoring() {
                         now
                     );
                 }
+
 
             } catch (error) {
 
@@ -1337,6 +1755,7 @@ function Monitoring() {
         return () => {
 
             stopCamera();
+
         };
 
     }, []);
@@ -1398,17 +1817,29 @@ function Monitoring() {
 
     const getScoreStatus = () => {
 
-        if (score >= 90) {
+        if (
+            score >= 90
+        ) {
+
             return "SAFE";
         }
 
-        if (score >= 70) {
+
+        if (
+            score >= 70
+        ) {
+
             return "CAUTION";
         }
 
-        if (score >= 50) {
+
+        if (
+            score >= 50
+        ) {
+
             return "HIGH RISK";
         }
+
 
         return "CRITICAL";
     };

@@ -1,4 +1,3 @@
-
 // src/pages/Monitoring.jsx
 
 import {
@@ -20,9 +19,13 @@ import {
 } from "../ai/riskEngine";
 
 import {
-    unlockAudio,
-    speakAlert,
     resetAudioAlerts,
+    unlockAudio,
+    speakPhoneAlert,
+    speakHeadPoseAlert,
+    speakAttentionAlert,
+    speakDrowsinessAlert,
+    speakYawningAlert,
 } from "../ai/audioAlerts";
 
 import {
@@ -37,40 +40,114 @@ import {
 
 
 // =====================================================
-// CONSTANTS
+// CONFIGURATION
 // =====================================================
 
-const PHONE_DETECTION_INTERVAL = 1200;
+// Phone detection interval
+const PHONE_DETECTION_INTERVAL = 1000;
+
+// Unsafe head pose must remain for this long
+// before alerting.
+const HEAD_POSE_DELAY = 1500;
+
+// Distracted attention must remain for this long.
+const ATTENTION_DELAY = 1500;
+
+// Drowsiness must remain for this long.
+const DROWSINESS_DELAY = 1800;
+
+// Yawning must remain for this long.
+const YAWNING_DELAY = 1500;
+
+// Minimum time between alerts of the same type.
+const CONDITION_ALERT_COOLDOWN = 7000;
+
+// Eye closure threshold
+const EYE_CLOSURE_THRESHOLD = 0.20;
 
 
 // =====================================================
-// MONITORING COMPONENT
+// COMPONENT
 // =====================================================
 
 function Monitoring() {
 
     // -------------------------------------------------
-    // Refs
+    // DOM / animation references
     // -------------------------------------------------
 
     const videoRef = useRef(null);
-
     const streamRef = useRef(null);
 
-    const animationFrameRef = useRef(null);
+    const animationFrameRef =
+        useRef(null);
 
-    const phoneDetectionTimerRef = useRef(null);
+    const lastVideoTimeRef =
+        useRef(-1);
 
-    const lastVideoTimeRef = useRef(-1);
-
-    const aiInitializingRef = useRef(false);
-
-    const phoneDetectionRunningRef = useRef(false);
+    const aiInitializingRef =
+        useRef(false);
 
 
     // -------------------------------------------------
-    // Camera / AI state
+    // Phone detection references
     // -------------------------------------------------
+
+    const lastPhoneDetectionRef =
+        useRef(0);
+
+    const phoneDetectionRunningRef =
+        useRef(false);
+
+
+    // -------------------------------------------------
+    // Unsafe condition timers
+    // -------------------------------------------------
+
+    const headPoseStartRef =
+        useRef(null);
+
+    const attentionStartRef =
+        useRef(null);
+
+    const drowsinessStartRef =
+        useRef(null);
+
+    const yawningStartRef =
+        useRef(null);
+
+
+    // -------------------------------------------------
+    // Last alert timestamps
+    // -------------------------------------------------
+
+    const lastHeadPoseAlertRef =
+        useRef(0);
+
+    const lastAttentionAlertRef =
+        useRef(0);
+
+    const lastDrowsinessAlertRef =
+        useRef(0);
+
+    const lastYawningAlertRef =
+        useRef(0);
+
+    const lastPhoneAlertRef =
+        useRef(0);
+
+
+    // -------------------------------------------------
+    // Phone state reference
+    // -------------------------------------------------
+
+    const phoneDetectedRef =
+        useRef(false);
+
+
+    // =================================================
+    // STATE
+    // =================================================
 
     const [cameraActive, setCameraActive] =
         useState(false);
@@ -83,11 +160,6 @@ function Monitoring() {
 
     const [aiError, setAiError] =
         useState("");
-
-
-    // -------------------------------------------------
-    // Driver monitoring state
-    // -------------------------------------------------
 
     const [score, setScore] =
         useState(100);
@@ -112,11 +184,6 @@ function Monitoring() {
 
     const [attention, setAttention] =
         useState("Not detected");
-
-
-    // -------------------------------------------------
-    // Phone detection state
-    // -------------------------------------------------
 
     const [phoneDetected, setPhoneDetected] =
         useState(false);
@@ -147,7 +214,7 @@ function Monitoring() {
 
 
     // =================================================
-    // CALCULATE EAR
+    // EAR CALCULATION
     // =================================================
 
     const calculateEAR = (
@@ -211,7 +278,7 @@ function Monitoring() {
 
 
     // =================================================
-    // CALCULATE EYE STATE
+    // EYE STATE
     // =================================================
 
     const calculateEyeState = (
@@ -253,17 +320,229 @@ function Monitoring() {
             ) / 2;
 
 
-        const eyesClosed =
+        const closed =
             averageEAR > 0 &&
-            averageEAR < 0.20;
+            averageEAR <
+                EYE_CLOSURE_THRESHOLD;
 
 
         return {
             leftEAR,
             rightEAR,
             averageEAR,
-            eyesClosed,
+            eyesClosed: closed,
         };
+    };
+
+
+    // =================================================
+    // RESET CONDITION TIMERS
+    // =================================================
+
+    const resetConditionTimers = () => {
+
+        headPoseStartRef.current =
+            null;
+
+        attentionStartRef.current =
+            null;
+
+        drowsinessStartRef.current =
+            null;
+
+        yawningStartRef.current =
+            null;
+    };
+
+
+    // =================================================
+    // RESET ALERT TIMERS
+    // =================================================
+
+    const resetAlertTimers = () => {
+
+        lastHeadPoseAlertRef.current =
+            0;
+
+        lastAttentionAlertRef.current =
+            0;
+
+        lastDrowsinessAlertRef.current =
+            0;
+
+        lastYawningAlertRef.current =
+            0;
+
+        lastPhoneAlertRef.current =
+            0;
+    };
+
+
+    // =================================================
+    // HEAD POSE ALERT
+    // =================================================
+
+    const processHeadPoseAlert = (
+        direction,
+        now
+    ) => {
+
+        const unsafe =
+            direction &&
+            direction !== "Center";
+
+
+        if (!unsafe) {
+
+            headPoseStartRef.current =
+                null;
+
+            return;
+        }
+
+
+        if (
+            headPoseStartRef.current ===
+            null
+        ) {
+
+            headPoseStartRef.current =
+                now;
+
+            return;
+        }
+
+
+        const duration =
+            now -
+            headPoseStartRef.current;
+
+
+        const cooldownPassed =
+            now -
+            lastHeadPoseAlertRef.current >=
+            CONDITION_ALERT_COOLDOWN;
+
+
+        if (
+            duration >= HEAD_POSE_DELAY &&
+            cooldownPassed
+        ) {
+
+            speakHeadPoseAlert();
+
+            lastHeadPoseAlertRef.current =
+                now;
+
+            setLastAlert(
+                "Head pose alert"
+            );
+        }
+    };
+
+
+    // =================================================
+    // ATTENTION ALERT
+    // =================================================
+
+    const processAttentionAlert = (
+        currentAttention,
+        now
+    ) => {
+
+        const distracted =
+            currentAttention &&
+            currentAttention !== "Focused";
+
+
+        if (!distracted) {
+
+            attentionStartRef.current =
+                null;
+
+            return;
+        }
+
+
+        if (
+            attentionStartRef.current ===
+            null
+        ) {
+
+            attentionStartRef.current =
+                now;
+
+            return;
+        }
+
+
+        const duration =
+            now -
+            attentionStartRef.current;
+
+
+        const cooldownPassed =
+            now -
+            lastAttentionAlertRef.current >=
+            CONDITION_ALERT_COOLDOWN;
+
+
+        if (
+            duration >= ATTENTION_DELAY &&
+            cooldownPassed
+        ) {
+
+            speakAttentionAlert();
+
+            lastAttentionAlertRef.current =
+                now;
+
+            setLastAlert(
+                "Attention alert"
+            );
+        }
+    };
+
+
+    // =================================================
+    // PHONE ALERT
+    // =================================================
+
+    const processPhoneAlert = (
+        detected,
+        now
+    ) => {
+
+        if (!detected) {
+
+            phoneDetectedRef.current =
+                false;
+
+            return;
+        }
+
+
+        phoneDetectedRef.current =
+            true;
+
+
+        const cooldownPassed =
+            now -
+            lastPhoneAlertRef.current >=
+            CONDITION_ALERT_COOLDOWN;
+
+
+        if (cooldownPassed) {
+
+            speakPhoneAlert();
+
+            lastPhoneAlertRef.current =
+                now;
+
+            setLastAlert(
+                "Phone detected"
+            );
+        }
     };
 
 
@@ -292,22 +571,20 @@ function Monitoring() {
 
             setAiError("");
 
+
             console.log(
                 "Initializing AI..."
             );
 
 
-            // -----------------------------------------
-            // Face AI
-            // -----------------------------------------
-
             await initializeFaceLandmarker();
+
 
             setAiReady(true);
 
 
             // -----------------------------------------
-            // Phone AI
+            // Phone detector
             // -----------------------------------------
 
             try {
@@ -325,7 +602,7 @@ function Monitoring() {
             } catch (error) {
 
                 console.error(
-                    "Phone detector initialization failed:",
+                    "Phone detector failed:",
                     error
                 );
 
@@ -335,6 +612,10 @@ function Monitoring() {
             }
 
 
+            console.log(
+                "Face AI initialized successfully"
+            );
+
         } catch (error) {
 
             console.error(
@@ -343,7 +624,7 @@ function Monitoring() {
             );
 
             setAiError(
-                "AI engine could not be initialized. Please check the AI model."
+                "AI engine could not be initialized. Please check the Face Landmarker model."
             );
 
         } finally {
@@ -362,28 +643,29 @@ function Monitoring() {
 
         try {
 
+            setCameraError("");
+            setAiError("");
+
+
             // -----------------------------------------
-            // Reset previous monitoring state
+            // IMPORTANT:
+            // Unlock audio directly from button click.
             // -----------------------------------------
-
-            resetRiskEngine();
-
-            resetAudioAlerts();
-
-
-            /*
-             * MUST happen immediately from the user's
-             * Start Monitoring button click.
-             *
-             * Do this BEFORE getUserMedia().
-             */
 
             unlockAudio();
 
 
-            setCameraError("");
-            setAiError("");
+            // -----------------------------------------
+            // Reset engines
+            // -----------------------------------------
 
+            resetRiskEngine();
+            resetAudioAlerts();
+
+
+            // -----------------------------------------
+            // Reset state
+            // -----------------------------------------
 
             setScore(100);
 
@@ -407,18 +689,34 @@ function Monitoring() {
                 "Not detected"
             );
 
-
             setPhoneDetected(false);
 
             setPhoneConfidence(0);
 
 
+            // -----------------------------------------
+            // Reset references
+            // -----------------------------------------
+
             lastVideoTimeRef.current =
                 -1;
 
+            lastPhoneDetectionRef.current =
+                0;
+
+            phoneDetectionRunningRef.current =
+                false;
+
+            phoneDetectedRef.current =
+                false;
+
+            resetConditionTimers();
+
+            resetAlertTimers();
+
 
             // -----------------------------------------
-            // Browser camera support
+            // Camera support
             // -----------------------------------------
 
             if (
@@ -465,7 +763,7 @@ function Monitoring() {
 
 
             // -----------------------------------------
-            // Attach camera
+            // Attach video
             // -----------------------------------------
 
             if (videoRef.current) {
@@ -507,7 +805,7 @@ function Monitoring() {
     const stopCamera = () => {
 
         // ---------------------------------------------
-        // Stop animation loop
+        // Stop animation
         // ---------------------------------------------
 
         if (
@@ -524,33 +822,10 @@ function Monitoring() {
 
 
         // ---------------------------------------------
-        // Stop phone timer
-        // ---------------------------------------------
-
-        if (
-            phoneDetectionTimerRef.current
-        ) {
-
-            clearTimeout(
-                phoneDetectionTimerRef.current
-            );
-
-            phoneDetectionTimerRef.current =
-                null;
-        }
-
-
-        phoneDetectionRunningRef.current =
-            false;
-
-
-        // ---------------------------------------------
         // Stop camera tracks
         // ---------------------------------------------
 
-        if (
-            streamRef.current
-        ) {
+        if (streamRef.current) {
 
             streamRef.current
                 .getTracks()
@@ -567,9 +842,7 @@ function Monitoring() {
         // Clear video
         // ---------------------------------------------
 
-        if (
-            videoRef.current
-        ) {
+        if (videoRef.current) {
 
             videoRef.current.pause();
 
@@ -590,7 +863,7 @@ function Monitoring() {
 
 
         // ---------------------------------------------
-        // Reset UI
+        // Reset state
         // ---------------------------------------------
 
         setScore(100);
@@ -624,8 +897,25 @@ function Monitoring() {
         setPhoneDetectionReady(false);
 
 
+        // ---------------------------------------------
+        // Reset refs
+        // ---------------------------------------------
+
         lastVideoTimeRef.current =
             -1;
+
+        lastPhoneDetectionRef.current =
+            0;
+
+        phoneDetectionRunningRef.current =
+            false;
+
+        phoneDetectedRef.current =
+            false;
+
+        resetConditionTimers();
+
+        resetAlertTimers();
     };
 
 
@@ -633,24 +923,30 @@ function Monitoring() {
     // PHONE DETECTION
     // =================================================
 
-    const runPhoneDetection = async () => {
+    const runPhoneDetection = async (
+        video,
+        now
+    ) => {
+
+        // ---------------------------------------------
+        // Prevent overlapping detections
+        // ---------------------------------------------
 
         if (
-            !cameraActive ||
-            !phoneDetectionReady ||
-            !videoRef.current ||
             phoneDetectionRunningRef.current
         ) {
             return;
         }
 
 
-        const video =
-            videoRef.current;
-
+        // ---------------------------------------------
+        // Interval
+        // ---------------------------------------------
 
         if (
-            video.readyState < 2
+            now -
+            lastPhoneDetectionRef.current <
+            PHONE_DETECTION_INTERVAL
         ) {
             return;
         }
@@ -659,6 +955,9 @@ function Monitoring() {
         phoneDetectionRunningRef.current =
             true;
 
+        lastPhoneDetectionRef.current =
+            now;
+
 
         try {
 
@@ -666,35 +965,41 @@ function Monitoring() {
                 await detectPhone(video);
 
 
-            setPhoneDetected(
-                Boolean(phoneResult.detected)
-            );
-
-
-            setPhoneConfidence(
-                typeof phoneResult.confidence === "number"
-                    ? phoneResult.confidence
-                    : 0
-            );
-
-
-            // -----------------------------------------
-            // PHONE AUDIO ALERT
-            // -----------------------------------------
-
-            if (
-                phoneResult.detected
-            ) {
-
-                speakAlert(
-                    "Please put the phone down and focus on driving."
-                );
-
-                setLastAlert(
-                    "Phone detected"
-                );
+            if (!phoneResult) {
+                return;
             }
 
+
+            const detected =
+                Boolean(
+                    phoneResult.detected
+                );
+
+
+            const confidence =
+                Number(
+                    phoneResult.confidence ||
+                    0
+                );
+
+
+            setPhoneDetected(
+                detected
+            );
+
+            setPhoneConfidence(
+                confidence
+            );
+
+
+            // -----------------------------------------
+            // Alert only after result returns.
+            // -----------------------------------------
+
+            processPhoneAlert(
+                detected,
+                performance.now()
+            );
 
         } catch (error) {
 
@@ -707,20 +1012,6 @@ function Monitoring() {
 
             phoneDetectionRunningRef.current =
                 false;
-
-
-            // -----------------------------------------
-            // Schedule next detection
-            // -----------------------------------------
-
-            if (cameraActive) {
-
-                phoneDetectionTimerRef.current =
-                    setTimeout(
-                        runPhoneDetection,
-                        PHONE_DETECTION_INTERVAL
-                    );
-            }
         }
     };
 
@@ -744,10 +1035,6 @@ function Monitoring() {
             videoRef.current;
 
 
-        // ---------------------------------------------
-        // Wait for video
-        // ---------------------------------------------
-
         if (
             video.readyState < 2
         ) {
@@ -766,7 +1053,7 @@ function Monitoring() {
 
 
         // ---------------------------------------------
-        // Process only new video frame
+        // Don't process the same video frame twice
         // ---------------------------------------------
 
         if (
@@ -780,6 +1067,10 @@ function Monitoring() {
 
             try {
 
+                // =====================================
+                // FACE DETECTION
+                // =====================================
+
                 const result =
                     detectFace(
                         video,
@@ -792,13 +1083,14 @@ function Monitoring() {
 
 
                 // =====================================
-                // FACE DETECTED
+                // FACE FOUND
                 // =====================================
 
                 if (
                     result &&
                     result.faceLandmarks &&
-                    result.faceLandmarks.length > 0
+                    result.faceLandmarks.length >
+                    0
                 ) {
 
                     const landmarks =
@@ -821,16 +1113,12 @@ function Monitoring() {
 
 
                     setEyeEAR(
-                        Number(
-                            eyeState.averageEAR
-                        ) || 0
+                        eyeState.averageEAR
                     );
 
 
                     setEyesClosed(
-                        Boolean(
-                            eyeState.eyesClosed
-                        )
+                        eyeState.eyesClosed
                     );
 
 
@@ -844,69 +1132,50 @@ function Monitoring() {
                         );
 
 
-                    const currentHeadDirection =
-                        headPose?.direction ||
-                        "Not detected";
+                    if (headPose) {
+
+                        const direction =
+                            headPose.direction ||
+                            "Not detected";
+
+                        const currentAttention =
+                            headPose.attention ||
+                            "Not detected";
 
 
-                    const currentAttention =
-                        headPose?.attention ||
-                        "Not detected";
-
-
-                    setHeadDirection(
-                        currentHeadDirection
-                    );
-
-
-                    setAttention(
-                        currentAttention
-                    );
-
-
-                    // =================================
-                    // HEAD POSE AUDIO ALERT
-                    // =================================
-
-                    if (
-                        currentHeadDirection !==
-                            "Center" &&
-                        currentHeadDirection !==
-                            "Not detected"
-                    ) {
-
-                        speakAlert(
-                            "Please keep your eyes on the road."
+                        setHeadDirection(
+                            direction
                         );
 
-                        setLastAlert(
-                            "Head turned"
-                        );
-                    }
-
-
-                    // =================================
-                    // ATTENTION AUDIO ALERT
-                    // =================================
-
-                    if (
-                        currentAttention ===
-                        "Distracted"
-                    ) {
-
-                        speakAlert(
-                            "Please focus your attention on the road."
+                        setAttention(
+                            currentAttention
                         );
 
-                        setLastAlert(
-                            "Attention distracted"
+
+                        // -----------------------------
+                        // Head pose alert
+                        // -----------------------------
+
+                        processHeadPoseAlert(
+                            direction,
+                            now
+                        );
+
+
+                        // -----------------------------
+                        // Attention alert
+                        // -----------------------------
+
+                        processAttentionAlert(
+                            currentAttention,
+                            now
                         );
                     }
 
 
-                    // ---------------------------------
-                    // Drowsiness
-                    // ---------------------------------
+                    // =================================
+                    // DROWSINESS
+                    // =================================
 
                     const risk =
                         updateDrowsiness(
@@ -916,23 +1185,20 @@ function Monitoring() {
 
                     if (risk) {
 
-                        setDrowsy(
+                        const currentDrowsy =
                             Boolean(
                                 risk.drowsy
-                            )
+                            );
+
+
+                        setDrowsy(
+                            currentDrowsy
                         );
 
 
-                        // ---------------------------------
-                        // Keep score valid
-                        // ---------------------------------
-
                         if (
                             typeof risk.score ===
-                                "number" &&
-                            Number.isFinite(
-                                risk.score
-                            )
+                            "number"
                         ) {
 
                             const safeScore =
@@ -953,23 +1219,69 @@ function Monitoring() {
                         }
 
 
-                        // =================================
-                        // DROWSINESS AUDIO ALERT
-                        // =================================
+                        // -----------------------------
+                        // Drowsiness timer
+                        // -----------------------------
 
                         if (
-                            risk.shouldAlert
+                            currentDrowsy
                         ) {
 
-                            speakAlert(
-                                "Warning. You appear to be drowsy. Please stay alert."
-                            );
+                            if (
+                                drowsinessStartRef.current ===
+                                null
+                            ) {
 
-                            setLastAlert(
-                                "Drowsiness alert"
-                            );
+                                drowsinessStartRef.current =
+                                    now;
+                            }
+
+
+                            const drowsyDuration =
+                                now -
+                                drowsinessStartRef.current;
+
+
+                            const cooldownPassed =
+                                now -
+                                lastDrowsinessAlertRef.current >=
+                                CONDITION_ALERT_COOLDOWN;
+
+
+                            if (
+                                drowsyDuration >=
+                                DROWSINESS_DELAY &&
+                                cooldownPassed
+                            ) {
+
+                                speakDrowsinessAlert();
+
+                                lastDrowsinessAlertRef.current =
+                                    now;
+
+                                setLastAlert(
+                                    "Drowsiness alert"
+                                );
+                            }
+
+                        } else {
+
+                            drowsinessStartRef.current =
+                                null;
                         }
                     }
+
+
+                    // =================================
+                    // YAWNING
+                    // =================================
+                    //
+                    // If your face detector later provides
+                    // a yawning value, this section can use it.
+                    //
+                    // Currently we deliberately DON'T invent
+                    // a yawning result.
+                    // =================================
 
                 } else {
 
@@ -1005,6 +1317,25 @@ function Monitoring() {
                     updateDrowsiness(
                         false
                     );
+
+
+                    // Reset condition timers
+                    resetConditionTimers();
+                }
+
+
+                // =====================================
+                // PHONE DETECTION
+                // =====================================
+
+                if (
+                    phoneDetectionReady
+                ) {
+
+                    runPhoneDetection(
+                        video,
+                        now
+                    );
                 }
 
             } catch (error) {
@@ -1017,9 +1348,9 @@ function Monitoring() {
         }
 
 
-        // ---------------------------------------------
-        // Continue animation loop
-        // ---------------------------------------------
+        // ===========================================
+        // NEXT FRAME
+        // ===========================================
 
         animationFrameRef.current =
             requestAnimationFrame(
@@ -1029,7 +1360,21 @@ function Monitoring() {
 
 
     // =================================================
-    // START / STOP AI LOOP
+    // CLEANUP
+    // =================================================
+
+    useEffect(() => {
+
+        return () => {
+
+            stopCamera();
+        };
+
+    }, []);
+
+
+    // =================================================
+    // START AI LOOP
     // =================================================
 
     useEffect(() => {
@@ -1039,26 +1384,20 @@ function Monitoring() {
             aiReady
         ) {
 
+            if (
+                animationFrameRef.current
+            ) {
+
+                cancelAnimationFrame(
+                    animationFrameRef.current
+                );
+            }
+
+
             animationFrameRef.current =
                 requestAnimationFrame(
                     runAI
                 );
-
-
-            // -----------------------------------------
-            // Start phone detection
-            // -----------------------------------------
-
-            if (
-                phoneDetectionReady
-            ) {
-
-                phoneDetectionTimerRef.current =
-                    setTimeout(
-                        runPhoneDetection,
-                        1000
-                    );
-            }
         }
 
 
@@ -1075,23 +1414,6 @@ function Monitoring() {
                 animationFrameRef.current =
                     null;
             }
-
-
-            if (
-                phoneDetectionTimerRef.current
-            ) {
-
-                clearTimeout(
-                    phoneDetectionTimerRef.current
-                );
-
-                phoneDetectionTimerRef.current =
-                    null;
-            }
-
-
-            phoneDetectionRunningRef.current =
-                false;
         };
 
     }, [
@@ -1099,20 +1421,6 @@ function Monitoring() {
         aiReady,
         phoneDetectionReady,
     ]);
-
-
-    // =================================================
-    // COMPONENT CLEANUP
-    // =================================================
-
-    useEffect(() => {
-
-        return () => {
-
-            stopCamera();
-        };
-
-    }, []);
 
 
     // =================================================
@@ -1125,16 +1433,13 @@ function Monitoring() {
             return "SAFE";
         }
 
-
         if (score >= 70) {
             return "CAUTION";
         }
 
-
         if (score >= 50) {
             return "HIGH RISK";
         }
-
 
         return "CRITICAL";
     };
@@ -1165,7 +1470,8 @@ function Monitoring() {
                     </h1>
 
                     <p>
-                        Keep the camera positioned toward the driver's face.
+                        Keep the camera positioned
+                        toward the driver's face.
                     </p>
 
                 </div>
@@ -1181,9 +1487,11 @@ function Monitoring() {
 
                     <i className="bi bi-circle-fill"></i>
 
-                    {cameraActive
-                        ? "MONITORING"
-                        : "OFFLINE"}
+                    {
+                        cameraActive
+                            ? "MONITORING"
+                            : "OFFLINE"
+                    }
 
                 </div>
 
@@ -1256,7 +1564,8 @@ function Monitoring() {
 
 
                                 <p>
-                                    Start monitoring to activate your camera.
+                                    Start monitoring to
+                                    activate your camera.
                                 </p>
 
                             </div>
@@ -1370,9 +1679,7 @@ function Monitoring() {
 
                         <div className="monitor-score">
 
-                            {Number.isFinite(score)
-                                ? score
-                                : 100}
+                            {score}
 
                             <span>
                                 /100
@@ -1409,8 +1716,6 @@ function Monitoring() {
                         </div>
 
 
-                        {/* Face */}
-
                         <Detection
                             icon="bi-person-check"
                             label="Face"
@@ -1427,8 +1732,6 @@ function Monitoring() {
                             }
                         />
 
-
-                        {/* Eyes */}
 
                         <Detection
                             icon="bi-eye"
@@ -1447,8 +1750,6 @@ function Monitoring() {
                         />
 
 
-                        {/* Drowsiness */}
-
                         <Detection
                             icon="bi-emoji-frown"
                             label="Drowsiness"
@@ -1466,8 +1767,6 @@ function Monitoring() {
                         />
 
 
-                        {/* Attention */}
-
                         <Detection
                             icon="bi-compass"
                             label="Attention"
@@ -1482,12 +1781,10 @@ function Monitoring() {
                                 cameraActive &&
                                 faceDetected &&
                                 attention ===
-                                    "Focused"
+                                "Focused"
                             }
                         />
 
-
-                        {/* Head Pose */}
 
                         <Detection
                             icon="bi-person-bounding-box"
@@ -1503,12 +1800,10 @@ function Monitoring() {
                                 cameraActive &&
                                 faceDetected &&
                                 headDirection ===
-                                    "Center"
+                                "Center"
                             }
                         />
 
-
-                        {/* Phone */}
 
                         <Detection
                             icon="bi-phone"
@@ -1530,8 +1825,6 @@ function Monitoring() {
                         />
 
 
-                        {/* Yawning */}
-
                         <Detection
                             icon="bi-emoji-smile"
                             label="Yawning"
@@ -1543,7 +1836,7 @@ function Monitoring() {
 
 
                     {/* =================================
-                        EAR
+                        EAR DEBUG
                     ================================== */}
 
                     <div className="ear-debug-card">
@@ -1554,21 +1847,20 @@ function Monitoring() {
 
 
                         <strong>
-                            {Number.isFinite(eyeEAR)
-                                ? eyeEAR.toFixed(3)
-                                : "0.000"}
+                            {eyeEAR.toFixed(3)}
                         </strong>
 
 
                         <small>
-                            Lower values indicate greater eye closure.
+                            Lower values indicate
+                            greater eye closure.
                         </small>
 
                     </div>
 
 
                     {/* =================================
-                        PHONE CONFIDENCE
+                        PHONE DEBUG
                     ================================== */}
 
                     {phoneDetectionReady && (
@@ -1582,11 +1874,14 @@ function Monitoring() {
 
                             <strong>
 
-                                {phoneDetected
-                                    ? `${(
-                                        phoneConfidence * 100
-                                    ).toFixed(1)}%`
-                                    : "No phone"}
+                                {
+                                    phoneDetected
+                                        ? `${(
+                                            phoneConfidence *
+                                            100
+                                        ).toFixed(1)}%`
+                                        : "No phone"
+                                }
 
                             </strong>
 
@@ -1615,7 +1910,6 @@ function Monitoring() {
                                 LAST ALERT
                             </span>
 
-
                             <strong>
                                 {lastAlert}
                             </strong>
@@ -1642,7 +1936,9 @@ function Monitoring() {
 
 
                             <p>
-                                Voice warnings will be played when unsafe behavior is detected.
+                                Voice warnings will be
+                                played when unsafe
+                                behavior is detected.
                             </p>
 
                         </div>
@@ -1706,7 +2002,6 @@ function Detection({
                 <span>
                     {label}
                 </span>
-
 
                 <strong>
                     {value}

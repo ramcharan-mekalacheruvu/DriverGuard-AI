@@ -1,20 +1,25 @@
 
 // src/ai/audioAlerts.js
 
-let lastMessage = "";
-let lastMessageTime = 0;
+/*
+ * DriverGuard AI - Audio Alert System
+ *
+ * Goals:
+ * 1. Exact alert messages
+ * 2. Prevent repeated/spam alerts
+ * 3. Support laptop + mobile browsers
+ * 4. Allow audio to be unlocked from Start Monitoring
+ * 5. Different cooldown for each alert type
+ * 6. Prevent low-priority alerts from constantly interrupting important ones
+ */
 
-const AUDIO_COOLDOWN = 5000;
 
-let audioUnlocked = false;
-let voicesLoaded = false;
-
-
-// ---------------------------------------------
-// Exact DriverGuard alert messages
-// ---------------------------------------------
+// ============================================================
+// ALERT MESSAGES
+// ============================================================
 
 export const ALERT_MESSAGES = {
+
     phone:
         "Please put the phone down and focus on driving.",
 
@@ -29,25 +34,72 @@ export const ALERT_MESSAGES = {
 
     yawning:
         "You appear tired. Please stay alert.",
+
 };
 
 
-// ---------------------------------------------
-// Check browser support
-// ---------------------------------------------
+// ============================================================
+// CONFIGURATION
+// ============================================================
+
+const ALERT_COOLDOWNS = {
+
+    phone: 8000,
+
+    headPose: 8000,
+
+    attention: 8000,
+
+    drowsiness: 10000,
+
+    yawning: 10000,
+
+};
+
+
+// ============================================================
+// STATE
+// ============================================================
+
+let audioUnlocked = false;
+
+let voicesLoaded = false;
+
+let currentSpeechType = null;
+
+let lastAlertTimes = {
+
+    phone: 0,
+
+    headPose: 0,
+
+    attention: 0,
+
+    drowsiness: 0,
+
+    yawning: 0,
+
+};
+
+
+// ============================================================
+// BROWSER SUPPORT
+// ============================================================
 
 function isSpeechSupported() {
+
     return (
         typeof window !== "undefined" &&
         "speechSynthesis" in window &&
         typeof window.SpeechSynthesisUtterance !== "undefined"
     );
+
 }
 
 
-// ---------------------------------------------
-// Load voices
-// ---------------------------------------------
+// ============================================================
+// LOAD VOICES
+// ============================================================
 
 function loadVoices() {
 
@@ -59,68 +111,83 @@ function loadVoices() {
         window.speechSynthesis.getVoices();
 
     if (voices && voices.length > 0) {
+
         voicesLoaded = true;
+
     }
 
     return voices || [];
+
 }
 
 
-// ---------------------------------------------
-// Get English voice
-// ---------------------------------------------
+// ============================================================
+// GET ENGLISH VOICE
+// ============================================================
 
 function getVoice() {
 
     const voices = loadVoices();
 
     if (!voices.length) {
+
         return null;
+
     }
 
-    return (
-        voices.find(
-            (voice) =>
+    const englishVoice =
+        voices.find((voice) => {
+
+            return (
                 voice.lang &&
                 voice.lang
                     .toLowerCase()
                     .startsWith("en")
-        ) || voices[0]
-    );
+            );
+
+        });
+
+    return englishVoice || voices[0];
+
 }
 
 
-// ---------------------------------------------
-// Load voices when browser makes them available
-// ---------------------------------------------
+// ============================================================
+// VOICE LOADING EVENT
+// ============================================================
 
 if (isSpeechSupported()) {
 
     loadVoices();
 
-    window.speechSynthesis.onvoiceschanged = () => {
-        loadVoices();
-    };
+    window.speechSynthesis.onvoiceschanged =
+        () => {
+
+            loadVoices();
+
+        };
+
 }
 
 
-// ---------------------------------------------
-// Unlock speech
+// ============================================================
+// UNLOCK AUDIO
 //
 // IMPORTANT:
-// This function MUST be called directly from
-// the Start Monitoring button click.
-// ---------------------------------------------
+// Call this directly inside the Start Monitoring
+// button click.
+// ============================================================
 
 export function unlockAudio() {
 
     if (!isSpeechSupported()) {
 
         console.warn(
-            "Speech synthesis is not supported."
+            "Speech synthesis is not supported by this browser."
         );
 
         return false;
+
     }
 
     try {
@@ -128,62 +195,81 @@ export function unlockAudio() {
         const synth =
             window.speechSynthesis;
 
-        // Stop previous speech
+        /*
+         * Cancel anything that may have been
+         * left in the speech queue.
+         */
+
         synth.cancel();
 
-        // Force browser to resume speech engine
-        if (typeof synth.resume === "function") {
+        /*
+         * Some mobile browsers pause speech
+         * synthesis automatically.
+         */
+
+        if (
+            typeof synth.resume === "function"
+        ) {
+
             synth.resume();
+
         }
 
         const voice = getVoice();
 
         /*
-         * Very short silent utterance.
-         * This primes speech synthesis on many
-         * mobile browsers.
+         * Use a very short silent utterance
+         * to initialize the speech engine.
          */
+
         const unlockUtterance =
             new SpeechSynthesisUtterance(".");
 
         unlockUtterance.volume = 0;
-        unlockUtterance.rate = 10;
-        unlockUtterance.pitch = 1;
 
-        if (voice) {
-            unlockUtterance.voice = voice;
-        }
+        unlockUtterance.rate = 10;
+
+        unlockUtterance.pitch = 1;
 
         unlockUtterance.lang =
             voice?.lang || "en-US";
 
+        if (voice) {
+
+            unlockUtterance.voice = voice;
+
+        }
+
         unlockUtterance.onend = () => {
 
             console.log(
-                "🔊 Speech engine unlocked"
+                "🔊 Speech engine ready"
             );
+
         };
 
-        unlockUtterance.onerror = (error) => {
+        unlockUtterance.onerror =
+            (error) => {
 
-            console.warn(
-                "Speech unlock warning:",
-                error
-            );
-        };
+                console.warn(
+                    "Speech unlock warning:",
+                    error
+                );
+
+            };
 
         synth.speak(
             unlockUtterance
         );
 
         /*
-         * Set this immediately because this function
-         * itself is called by the user's tap.
+         * Mark audio as unlocked.
          */
+
         audioUnlocked = true;
 
         console.log(
-            "🔊 Audio unlocked"
+            "🔊 DriverGuard audio unlocked"
         );
 
         return true;
@@ -198,15 +284,70 @@ export function unlockAudio() {
         audioUnlocked = false;
 
         return false;
+
     }
+
 }
 
 
-// ---------------------------------------------
-// Speak alert
-// ---------------------------------------------
+// ============================================================
+// NORMALIZE ALERT TYPE
+// ============================================================
 
-export function speakAlert(message) {
+function normalizeAlertType(type) {
+
+    if (
+        type &&
+        Object.prototype.hasOwnProperty.call(
+            ALERT_MESSAGES,
+            type
+        )
+    ) {
+
+        return type;
+
+    }
+
+    return null;
+
+}
+
+
+// ============================================================
+// CHECK ALERT COOLDOWN
+// ============================================================
+
+function canSpeak(type) {
+
+    const now = Date.now();
+
+    const lastTime =
+        lastAlertTimes[type] || 0;
+
+    const cooldown =
+        ALERT_COOLDOWNS[type] || 8000;
+
+    return (
+        now - lastTime >= cooldown
+    );
+
+}
+
+
+// ============================================================
+// SPEAK ALERT
+//
+// Usage:
+//
+// speakAlert("phone")
+// speakAlert("headPose")
+// speakAlert("attention")
+// speakAlert("drowsiness")
+// speakAlert("yawning")
+//
+// ============================================================
+
+export function speakAlert(type) {
 
     if (!isSpeechSupported()) {
 
@@ -215,34 +356,37 @@ export function speakAlert(message) {
         );
 
         return false;
+
     }
 
-    if (!message) {
-        return false;
-    }
+    const alertType =
+        normalizeAlertType(type);
 
-    /*
-     * If audio wasn't initialized, try to resume it.
-     */
-    if (!audioUnlocked) {
+    if (!alertType) {
 
         console.warn(
-            "⚠️ Audio is locked. User interaction is required."
+            "Unknown alert type:",
+            type
         );
 
         return false;
+
     }
 
-    const now = Date.now();
+    if (!audioUnlocked) {
 
-    /*
-     * Prevent repeated alerts.
-     */
-    if (
-        message === lastMessage &&
-        now - lastMessageTime < AUDIO_COOLDOWN
-    ) {
+        console.warn(
+            "⚠️ Audio is locked. Start Monitoring must unlock audio first."
+        );
+
         return false;
+
+    }
+
+    if (!canSpeak(alertType)) {
+
+        return false;
+
     }
 
     try {
@@ -251,65 +395,89 @@ export function speakAlert(message) {
             window.speechSynthesis;
 
         /*
-         * Mobile browsers can sometimes leave the
-         * speech engine paused.
+         * Make sure speech engine is running.
          */
-        if (typeof synth.resume === "function") {
+
+        if (
+            typeof synth.resume === "function"
+        ) {
+
             synth.resume();
+
         }
 
         /*
-         * Cancel only existing speech.
+         * Stop currently playing speech.
+         *
+         * This prevents multiple alerts from
+         * stacking in the browser queue.
          */
+
         synth.cancel();
 
         const voice = getVoice();
 
         const utterance =
             new SpeechSynthesisUtterance(
-                message
+                ALERT_MESSAGES[alertType]
             );
 
         utterance.rate = 0.95;
+
         utterance.pitch = 1;
+
         utterance.volume = 1;
 
         utterance.lang =
             voice?.lang || "en-US";
 
         if (voice) {
+
             utterance.voice = voice;
+
         }
+
+        currentSpeechType =
+            alertType;
 
         utterance.onstart = () => {
 
             console.log(
-                "🔊 ALERT:",
-                message
+                `🔊 ${alertType} alert:`,
+                ALERT_MESSAGES[alertType]
             );
+
         };
 
         utterance.onend = () => {
 
-            console.log(
-                "🔊 Alert finished"
-            );
+            currentSpeechType = null;
+
         };
 
-        utterance.onerror = (event) => {
+        utterance.onerror =
+            (event) => {
 
-            console.error(
-                "🔊 Speech error:",
-                event
-            );
-        };
+                console.error(
+                    `🔊 ${alertType} speech error:`,
+                    event
+                );
+
+                currentSpeechType = null;
+
+            };
 
         synth.speak(
             utterance
         );
 
-        lastMessage = message;
-        lastMessageTime = now;
+        /*
+         * Store the time ONLY after successfully
+         * scheduling the utterance.
+         */
+
+        lastAlertTimes[alertType] =
+            Date.now();
 
         return true;
 
@@ -320,73 +488,111 @@ export function speakAlert(message) {
             error
         );
 
+        currentSpeechType = null;
+
         return false;
+
     }
+
 }
 
 
-// ---------------------------------------------
-// Individual alert functions
-// ---------------------------------------------
+// ============================================================
+// INDIVIDUAL ALERT FUNCTIONS
+// ============================================================
 
 export function speakPhoneAlert() {
 
-    return speakAlert(
-        ALERT_MESSAGES.phone
-    );
+    return speakAlert("phone");
+
 }
 
 
 export function speakHeadPoseAlert() {
 
-    return speakAlert(
-        ALERT_MESSAGES.headPose
-    );
+    return speakAlert("headPose");
+
 }
 
 
 export function speakAttentionAlert() {
 
-    return speakAlert(
-        ALERT_MESSAGES.attention
-    );
+    return speakAlert("attention");
+
 }
 
 
 export function speakDrowsinessAlert() {
 
-    return speakAlert(
-        ALERT_MESSAGES.drowsiness
-    );
+    return speakAlert("drowsiness");
+
 }
 
 
 export function speakYawningAlert() {
 
-    return speakAlert(
-        ALERT_MESSAGES.yawning
-    );
+    return speakAlert("yawning");
+
 }
 
 
-// ---------------------------------------------
-// Audio status
-// ---------------------------------------------
+// ============================================================
+// AUDIO STATUS
+// ============================================================
 
 export function isAudioUnlocked() {
 
     return audioUnlocked;
+
 }
 
 
-// ---------------------------------------------
-// Reset alerts
-// ---------------------------------------------
+export function isSpeaking() {
+
+    if (!isSpeechSupported()) {
+
+        return false;
+
+    }
+
+    return window.speechSynthesis.speaking;
+
+}
+
+
+export function getCurrentSpeechType() {
+
+    return currentSpeechType;
+
+}
+
+
+// ============================================================
+// RESET ALERT TIMERS
+//
+// Used when monitoring starts/stops.
+//
+// IMPORTANT:
+// Audio remains unlocked.
+// ============================================================
 
 export function resetAudioAlerts() {
 
-    lastMessage = "";
-    lastMessageTime = 0;
+    lastAlertTimes = {
+
+        phone: 0,
+
+        headPose: 0,
+
+        attention: 0,
+
+        drowsiness: 0,
+
+        yawning: 0,
+
+    };
+
+    currentSpeechType = null;
 
     if (isSpeechSupported()) {
 
@@ -396,30 +602,75 @@ export function resetAudioAlerts() {
             typeof window.speechSynthesis.resume ===
             "function"
         ) {
+
             window.speechSynthesis.resume();
+
         }
+
     }
 
-    /*
-     * DO NOT set audioUnlocked to false.
-     *
-     * The user already interacted with the page.
-     */
 }
 
 
-// ---------------------------------------------
-// Completely lock audio
-// ---------------------------------------------
+// ============================================================
+// COMPLETELY LOCK AUDIO
+//
+// Use only when you intentionally want to require
+// another user interaction.
+// ============================================================
 
 export function lockAudio() {
 
     audioUnlocked = false;
 
-    lastMessage = "";
-    lastMessageTime = 0;
+    currentSpeechType = null;
+
+    lastAlertTimes = {
+
+        phone: 0,
+
+        headPose: 0,
+
+        attention: 0,
+
+        drowsiness: 0,
+
+        yawning: 0,
+
+    };
 
     if (isSpeechSupported()) {
+
         window.speechSynthesis.cancel();
+
     }
+
+}
+
+
+// ============================================================
+// OPTIONAL DEBUG INFORMATION
+// ============================================================
+
+export function getAudioStatus() {
+
+    return {
+
+        supported:
+            isSpeechSupported(),
+
+        unlocked:
+            audioUnlocked,
+
+        voicesLoaded:
+            voicesLoaded,
+
+        speaking:
+            isSpeaking(),
+
+        currentSpeechType:
+            currentSpeechType,
+
+    };
+
 }
